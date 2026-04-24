@@ -2,6 +2,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@3/index.js?module";
 
 const ALARM_FEATURE_ARM_HOME = 1;
 const ALARM_FEATURE_ARM_AWAY = 2;
+const ALARM_FEATURE_ARM_NIGHT = 4;
 
 class PulsonAlarmCard extends LitElement {
   static get properties() {
@@ -242,6 +243,55 @@ class PulsonAlarmCard extends LitElement {
     return "";
   }
 
+  _getAllowedActionsForPartition(partition) {
+    const state = partition.entity.state;
+    const features = Number(partition.entity.attributes.supported_features || 0);
+
+    if (state === "disarmed") {
+      const actions = [];
+      if ((features & ALARM_FEATURE_ARM_NIGHT) !== 0) actions.push("alarm_arm_night");
+      if ((features & ALARM_FEATURE_ARM_AWAY) !== 0) actions.push("alarm_arm_away");
+      return actions;
+    }
+
+    if (state.startsWith("armed") || state === "triggered") {
+      return ["alarm_disarm"];
+    }
+
+    return [];
+  }
+
+  _getCommonActions(selectedPartitions) {
+    if (!selectedPartitions.length) return [];
+
+    const all = selectedPartitions.map((partition) => this._getAllowedActionsForPartition(partition));
+    return all[0].filter((action) => all.every((list) => list.includes(action)));
+  }
+
+  _actionUi(action) {
+    const map = {
+      alarm_arm_away: {
+        label: "Uzbrój (Wyjście)",
+        shortLabel: "Wyjście",
+        icon: "mdi:shield-lock-outline",
+        className: "arm-away",
+      },
+      alarm_arm_night: {
+        label: "Uzbrój (Noc)",
+        shortLabel: "Noc",
+        icon: "mdi:weather-night",
+        className: "arm-night",
+      },
+      alarm_disarm: {
+        label: "Rozbrój",
+        shortLabel: "Rozbrój",
+        icon: "mdi:lock-open-variant-outline",
+        className: "disarm",
+      },
+    };
+    return map[action];
+  }
+
   _renderKeyButton(label, value = label) {
     return html`
       <button class="key" @click=${() => this._appendDigit(value)}>
@@ -269,12 +319,7 @@ class PulsonAlarmCard extends LitElement {
     }
 
     const selectedPartitions = partitions.filter((p) => this._selectedEntities.includes(p.entityId));
-    const canArmAway =
-      selectedPartitions.length > 0 &&
-      selectedPartitions.every((p) => (Number(p.entity.attributes.supported_features || 0) & ALARM_FEATURE_ARM_AWAY) !== 0);
-    const canArmHome =
-      selectedPartitions.length > 0 &&
-      selectedPartitions.every((p) => (Number(p.entity.attributes.supported_features || 0) & ALARM_FEATURE_ARM_HOME) !== 0);
+    const commonActions = this._getCommonActions(selectedPartitions);
     const maskedPin = this._pin.length ? "*".repeat(this._pin.length) : "-";
     const selectedCount = selectedPartitions.length;
     const hasGlobalFault = this._hasGlobalFault(partitions);
@@ -284,12 +329,11 @@ class PulsonAlarmCard extends LitElement {
       .slice(0, 4)
       .join(", ");
     const selectedOverflow = selectedPartitions.length > 4 ? ` +${selectedPartitions.length - 4}` : "";
-    const armAwayIssue = this._actionSupportIssue("alarm_arm_away", selectedPartitions);
-    const armHomeIssue = this._actionSupportIssue("alarm_arm_home", selectedPartitions);
+    const hasCompatibleAction = commonActions.length > 0;
 
     const pendingActionLabel = {
       alarm_arm_away: "Uzbroj",
-      alarm_arm_home: "Uzbroj w domu",
+      alarm_arm_night: "Uzbroj noc",
       alarm_disarm: "Rozbroj",
     }[this._pendingAction];
 
@@ -306,7 +350,23 @@ class PulsonAlarmCard extends LitElement {
               <div class="title">${this._config.name}</div>
               <div class="subtitle">Zaznaczone partycje: ${selectedCount}</div>
             </div>
-            <div class="status-pill">${this._pendingAction ? `Akcja: ${pendingActionLabel}` : "Gotowy"}</div>
+            <div class="hero-actions">
+              ${this._pendingAction
+                ? html`<div class="status-pill">Akcja: ${pendingActionLabel}</div>`
+                : commonActions.map((action) => {
+                    const actionUi = this._actionUi(action);
+                    return html`
+                      <button
+                        class="hero-action ${actionUi.className}"
+                        aria-label=${actionUi.label}
+                        title=${actionUi.label}
+                        @click=${() => this._queueAction(action)}
+                      >
+                        <ha-icon icon=${actionUi.icon}></ha-icon>
+                      </button>
+                    `;
+                  })}
+            </div>
           </div>
           ${this._feedback ? html`<div class="feedback ${this._feedback.type}" role="status">${this._feedback.text}</div>` : ""}
 
@@ -330,32 +390,12 @@ class PulsonAlarmCard extends LitElement {
             )}
           </div>
 
-          <div class="section-label">Akcje</div>
-          <div class="actions">
-            <button
-              class="action primary"
-              ?disabled=${!canArmAway || selectedCount === 0}
-              title=${armAwayIssue}
-              @click=${() => this._queueAction("alarm_arm_away")}
-            >
-              Uzbroj
-            </button>
-            <button
-              class="action secondary"
-              ?disabled=${!canArmHome || selectedCount === 0}
-              title=${armHomeIssue}
-              @click=${() => this._queueAction("alarm_arm_home")}
-            >
-              Uzbroj w domu
-            </button>
-            <button
-              class="action danger"
-              ?disabled=${selectedCount === 0}
-              @click=${() => this._queueAction("alarm_disarm")}
-            >
-              Rozbroj
-            </button>
-          </div>
+          ${selectedCount === 0
+            ? html`<div class="helper">Wybierz partycje, aby pokazac dostepne akcje.</div>`
+            : ""}
+          ${selectedCount > 0 && !hasCompatibleAction
+            ? html`<div class="helper">Dla wybranego zestawu partycji brak wspolnej akcji.</div>`
+            : ""}
 
           ${this._pendingAction
             ? html`
@@ -427,6 +467,12 @@ class PulsonAlarmCard extends LitElement {
         padding: 12px;
       }
 
+      .hero-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
       .global-fault {
         position: absolute;
         top: -8px;
@@ -473,6 +519,37 @@ class PulsonAlarmCard extends LitElement {
         background: var(--ha-card-background, #ffffff);
       }
 
+      .hero-action {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        border: 1px solid var(--divider-color, #e2e8f0);
+        background: var(--ha-card-background, #ffffff);
+        color: var(--secondary-text-color, #475569);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+      }
+
+      .hero-action ha-icon {
+        --mdc-icon-size: 18px;
+      }
+
+      .hero-action.arm-away {
+        color: color-mix(in srgb, var(--primary-color, #3b82f6) 80%, #000);
+        background: color-mix(in srgb, var(--primary-color, #3b82f6) 10%, transparent);
+      }
+
+      .hero-action.arm-night {
+        color: color-mix(in srgb, var(--warning-color, #f59e0b) 80%, #000);
+        background: color-mix(in srgb, var(--warning-color, #f59e0b) 12%, transparent);
+      }
+
+      .hero-action.disarm {
+        color: color-mix(in srgb, var(--error-color, #dc2626) 80%, #000);
+        background: color-mix(in srgb, var(--error-color, #dc2626) 10%, transparent);
+      }
+
       .section-label {
         margin-top: 2px;
         font-size: 0.68rem;
@@ -497,6 +574,14 @@ class PulsonAlarmCard extends LitElement {
       .feedback.error {
         color: var(--error-color, #dc2626);
         background: color-mix(in srgb, var(--error-color, #dc2626) 10%, transparent);
+      }
+
+      .helper {
+        font-size: 0.74rem;
+        color: var(--secondary-text-color, #64748b);
+        border: 1px dashed var(--divider-color, #e2e8f0);
+        border-radius: 10px;
+        padding: 7px 9px;
       }
 
       .partition-grid {
@@ -645,8 +730,7 @@ class PulsonAlarmCard extends LitElement {
         gap: 8px;
       }
 
-      .key,
-      .action {
+      .key {
         min-height: 44px;
         border: 1px solid transparent;
         border-radius: 12px;
@@ -666,45 +750,15 @@ class PulsonAlarmCard extends LitElement {
         color: var(--secondary-text-color, #64748b);
       }
 
-      .actions {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-      }
-
-      .action.primary {
-        background: var(--primary-text-color, #111827);
-        color: var(--text-primary-color, #fff);
-        border-color: var(--primary-text-color, #111827);
-      }
-
-      .action.secondary {
-        background: var(--ha-card-background, #ffffff);
-        color: var(--primary-text-color, #111827);
-        border-color: var(--divider-color, #e2e8f0);
-      }
-
-      .action.danger {
-        background: color-mix(in srgb, var(--error-color, #dc2626) 10%, transparent);
-        color: var(--error-color, #dc2626);
-        border-color: color-mix(in srgb, var(--error-color, #dc2626) 25%, var(--divider-color, #e2e8f0));
-      }
-
-      .action:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-        filter: grayscale(0.3);
-      }
-
       .key:active,
       .partition:active,
-      .action:active {
+      .hero-action:active {
         transform: translateY(1px);
       }
 
       .key:hover,
       .partition:hover,
-      .action:hover {
+      .hero-action:hover {
         filter: brightness(1.05);
       }
 
@@ -766,8 +820,8 @@ class PulsonAlarmCard extends LitElement {
         .hero,
         .section-label,
         .partition-grid,
-        .actions,
-        .feedback {
+        .feedback,
+        .helper {
           grid-column: 1 / -1;
         }
 
