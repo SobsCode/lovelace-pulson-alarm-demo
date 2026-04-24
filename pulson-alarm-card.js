@@ -161,6 +161,20 @@ class PulsonAlarmCard extends LitElement {
     });
   }
 
+  _heroStateClass(partitions) {
+    if (!partitions.length) return "neutral";
+    const hasAlarm = partitions.some((partition) => partition.entity.state === "triggered");
+    if (hasAlarm) return "alarm";
+
+    const hasDisarmed = partitions.some((partition) => partition.entity.state === "disarmed");
+    if (hasDisarmed) return "safe";
+
+    const allArmed = partitions.every((partition) => partition.entity.state.startsWith("armed"));
+    if (allArmed) return "armed";
+
+    return "neutral";
+  }
+
   _getGlobalFaultText(partitions) {
     const tags = [];
     partitions.forEach((partition) => {
@@ -341,6 +355,7 @@ class PulsonAlarmCard extends LitElement {
     const selectedCount = selectedPartitions.length;
     const hasGlobalFault = this._hasGlobalFault(partitions);
     const globalFaultText = this._getGlobalFaultText(partitions);
+    const heroStateClass = this._heroStateClass(partitions);
     const selectedSummary = selectedPartitions
       .map((p) => (p.index ? `P${p.index}` : p.title))
       .slice(0, 4)
@@ -357,7 +372,7 @@ class PulsonAlarmCard extends LitElement {
     return html`
       <ha-card>
         <div class="container">
-          <div class="hero">
+          <div class="hero ${heroStateClass}">
             ${hasGlobalFault
               ? html`<div class="global-fault" title=${globalFaultText}>
                   <ha-icon icon="mdi:alert-outline"></ha-icon> ${globalFaultText}
@@ -510,6 +525,37 @@ class PulsonAlarmCard extends LitElement {
         pointer-events: none;
       }
 
+      .hero.safe {
+        background:
+          linear-gradient(
+            160deg,
+            color-mix(in srgb, var(--success-color, #16a34a) 16%, var(--secondary-background-color, #f8fafc)),
+            color-mix(in srgb, var(--primary-color, #3b82f6) 6%, var(--secondary-background-color, #f8fafc))
+          );
+        border-color: color-mix(in srgb, var(--success-color, #16a34a) 24%, var(--divider-color, #e2e8f0));
+      }
+
+      .hero.armed {
+        background:
+          linear-gradient(
+            160deg,
+            color-mix(in srgb, var(--error-color, #dc2626) 18%, var(--secondary-background-color, #f8fafc)),
+            color-mix(in srgb, var(--warning-color, #f59e0b) 6%, var(--secondary-background-color, #f8fafc))
+          );
+        border-color: color-mix(in srgb, var(--error-color, #dc2626) 26%, var(--divider-color, #e2e8f0));
+      }
+
+      .hero.alarm {
+        background:
+          linear-gradient(
+            160deg,
+            color-mix(in srgb, var(--error-color, #dc2626) 24%, var(--secondary-background-color, #f8fafc)),
+            color-mix(in srgb, #b91c1c 18%, var(--secondary-background-color, #f8fafc))
+          );
+        border-color: color-mix(in srgb, var(--error-color, #dc2626) 40%, var(--divider-color, #e2e8f0));
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--error-color, #dc2626) 22%, transparent);
+      }
+
       .hero-actions {
         display: inline-flex;
         align-items: center;
@@ -560,6 +606,12 @@ class PulsonAlarmCard extends LitElement {
         border: 1px solid var(--divider-color, #e2e8f0);
         color: var(--secondary-text-color, #475569);
         background: var(--ha-card-background, #ffffff);
+      }
+
+      .hero.alarm .status-pill {
+        color: var(--error-color, #dc2626);
+        border-color: color-mix(in srgb, var(--error-color, #dc2626) 25%, var(--divider-color, #e2e8f0));
+        background: color-mix(in srgb, var(--error-color, #dc2626) 8%, var(--ha-card-background, #ffffff));
       }
 
       .hero-action {
