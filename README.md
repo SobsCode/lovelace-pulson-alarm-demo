@@ -7,7 +7,9 @@
 - Modern hero header with active partition and state
 - Live status overview for available partitions (up to 8)
 - Automatic partition discovery for entities named like `..._p1` to `..._p8`
-- Secure PIN entry via numeric keypad (`0-9`, clear)
+- Multi-select support for partitions (execute one action on many partitions at once)
+- PIN keypad shown only after action selection (`Uzbroj`, `Uzbroj w domu`, `Rozbroj`)
+- Two-step secure flow: choose action -> enter PIN -> confirm
 - Action buttons:
   - `Uzbroj` (arm away)
   - `Uzbroj w domu` (arm home)

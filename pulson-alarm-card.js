@@ -9,7 +9,8 @@ class PulsonAlarmCard extends LitElement {
       _hass: { state: false },
       _config: { state: false },
       _pin: { state: true },
-      _selectedEntity: { state: true },
+      _selectedEntities: { state: true },
+      _pendingAction: { state: true },
     };
   }
 
@@ -18,7 +19,8 @@ class PulsonAlarmCard extends LitElement {
     this._hass = null;
     this._config = null;
     this._pin = "";
-    this._selectedEntity = null;
+    this._selectedEntities = [];
+    this._pendingAction = null;
   }
 
   setConfig(config) {
@@ -44,14 +46,9 @@ class PulsonAlarmCard extends LitElement {
   set hass(hass) {
     this._hass = hass;
     const partitions = this._getPartitions();
-    if (partitions.length > 0) {
-      const hasSelected = partitions.some((p) => p.entityId === this._selectedEntity);
-      if (!hasSelected) {
-        this._selectedEntity = partitions[0].entityId;
-      }
-    } else {
-      this._selectedEntity = null;
-    }
+    const availableIds = partitions.map((p) => p.entityId);
+    this._selectedEntities = this._selectedEntities.filter((id) => availableIds.includes(id));
+    if (!this._selectedEntities.length && partitions.length) this._selectedEntities = [partitions[0].entityId];
     this.requestUpdate();
   }
 
@@ -79,12 +76,24 @@ class PulsonAlarmCard extends LitElement {
   }
 
   _stateClass(state) {
-    if (state === "triggered") return "triggered";
+    if (state === "triggered") return "alarm";
     if (state === "disarmed") return "disarmed";
     if (state.startsWith("armed")) return "armed";
+    if (state === "pending" || state === "arming") return "arming";
+    if (state === "disarming") return "disarming";
     if (state === "pending" || state === "arming" || state === "disarming") return "transition";
     if (state === "unavailable" || state === "unknown") return "offline";
     return "default";
+  }
+
+  _stateIcon(state) {
+    if (state === "triggered") return "mdi:alarm-light";
+    if (state === "disarmed") return "mdi:lock-open-variant-outline";
+    if (state.startsWith("armed")) return "mdi:shield-lock-outline";
+    if (state === "pending" || state === "arming") return "mdi:progress-clock";
+    if (state === "disarming") return "mdi:lock-open-alert-outline";
+    if (state === "unavailable" || state === "unknown") return "mdi:lan-disconnect";
+    return "mdi:shield-outline";
   }
 
   _discoverEntityGroup(seedEntityId) {
@@ -134,22 +143,26 @@ class PulsonAlarmCard extends LitElement {
       .filter(Boolean);
   }
 
-  _getSummary(partitions) {
-    return partitions.reduce(
-      (acc, partition) => {
-        const state = partition.entity.state;
-        if (state === "triggered") acc.triggered += 1;
-        else if (state.startsWith("armed")) acc.armed += 1;
-        else if (state === "disarmed") acc.disarmed += 1;
-        else acc.other += 1;
-        return acc;
-      },
-      { armed: 0, disarmed: 0, triggered: 0, other: 0 },
-    );
+  _hasGlobalFault(partitions) {
+    return partitions.some((partition) => {
+      const attrs = partition.entity.attributes || {};
+      return (
+        attrs.trouble === true ||
+        attrs.fault === true ||
+        attrs.system_fault === true ||
+        attrs.tamper === true ||
+        attrs.communication_lost === true
+      );
+    });
   }
 
-  _selectPartition(entityId) {
-    this._selectedEntity = entityId;
+  _togglePartition(entityId) {
+    if (this._selectedEntities.includes(entityId)) {
+      this._selectedEntities = this._selectedEntities.filter((id) => id !== entityId);
+      return;
+    }
+    if (this._selectedEntities.length >= 8) return;
+    this._selectedEntities = [...this._selectedEntities, entityId];
   }
 
   _appendDigit(digit) {
@@ -160,16 +173,31 @@ class PulsonAlarmCard extends LitElement {
     this._pin = "";
   }
 
-  async _callAlarmService(service) {
-    if (!this._hass || !this._selectedEntity) return;
+  _queueAction(service) {
+    if (!this._selectedEntities.length) return;
+    this._pendingAction = service;
+    this._pin = "";
+  }
+
+  _cancelPendingAction() {
+    this._pendingAction = null;
+    this._pin = "";
+  }
+
+  async _executePendingAction() {
+    if (!this._hass || !this._pendingAction || !this._selectedEntities.length) return;
 
     try {
-      await this._hass.callService("alarm_control_panel", service, {
-        entity_id: this._selectedEntity,
-        code: this._pin,
-      });
+      await Promise.all(
+        this._selectedEntities.map((entityId) =>
+          this._hass.callService("alarm_control_panel", this._pendingAction, {
+            entity_id: entityId,
+            code: this._pin,
+          }),
+        ),
+      );
     } finally {
-      this._clearPin();
+      this._cancelPendingAction();
     }
   }
 
@@ -199,37 +227,33 @@ class PulsonAlarmCard extends LitElement {
       `;
     }
 
-    const selected = partitions.find((p) => p.entityId === this._selectedEntity) || partitions[0];
-    const selectedFeatures = Number(selected.entity.attributes.supported_features || 0);
-    const canArmAway = (selectedFeatures & ALARM_FEATURE_ARM_AWAY) !== 0;
-    const canArmHome = (selectedFeatures & ALARM_FEATURE_ARM_HOME) !== 0;
-    const summary = this._getSummary(partitions);
+    const selectedPartitions = partitions.filter((p) => this._selectedEntities.includes(p.entityId));
+    const canArmAway =
+      selectedPartitions.length > 0 &&
+      selectedPartitions.every((p) => (Number(p.entity.attributes.supported_features || 0) & ALARM_FEATURE_ARM_AWAY) !== 0);
+    const canArmHome =
+      selectedPartitions.length > 0 &&
+      selectedPartitions.every((p) => (Number(p.entity.attributes.supported_features || 0) & ALARM_FEATURE_ARM_HOME) !== 0);
     const maskedPin = this._pin.length ? "*".repeat(this._pin.length) : "-";
+    const selectedCount = selectedPartitions.length;
+    const hasGlobalFault = this._hasGlobalFault(partitions);
+
+    const pendingActionLabel = {
+      alarm_arm_away: "Uzbroj",
+      alarm_arm_home: "Uzbroj w domu",
+      alarm_disarm: "Rozbroj",
+    }[this._pendingAction];
 
     return html`
       <ha-card>
         <div class="container">
           <div class="hero">
+            ${hasGlobalFault ? html`<div class="global-fault"><ha-icon icon="mdi:alert-outline"></ha-icon> Usterka systemu</div>` : ""}
             <div>
               <div class="title">${this._config.name}</div>
-              <div class="subtitle">Aktywna: ${selected.title}</div>
+              <div class="subtitle">Zaznaczone partycje: ${selectedCount}</div>
             </div>
-            <div class="status-pill ${selected.stateClass}">${selected.stateLabel}</div>
-          </div>
-
-          <div class="summary-grid">
-            <div class="summary-tile">
-              <span>Uzbrojone</span>
-              <strong>${summary.armed}</strong>
-            </div>
-            <div class="summary-tile">
-              <span>Rozbrojone</span>
-              <strong>${summary.disarmed}</strong>
-            </div>
-            <div class="summary-tile alert">
-              <span>Alarm</span>
-              <strong>${summary.triggered}</strong>
-            </div>
+            <div class="status-pill">${this._pendingAction ? `Akcja: ${pendingActionLabel}` : "Gotowy"}</div>
           </div>
 
           <div class="section-label">Partycje</div>
@@ -237,53 +261,74 @@ class PulsonAlarmCard extends LitElement {
             ${partitions.map(
               (partition) => html`
                 <button
-                  class="partition ${partition.stateClass} ${partition.entityId === selected.entityId ? "active" : ""}"
-                  @click=${() => this._selectPartition(partition.entityId)}
+                  class="partition ${partition.stateClass} ${this._selectedEntities.includes(partition.entityId) ? "active" : ""}"
+                  @click=${() => this._togglePartition(partition.entityId)}
                 >
-                  <div class="partition-name">${partition.title}</div>
+                  <div class="partition-icon ${partition.stateClass}">
+                    <ha-icon icon=${this._stateIcon(partition.entity.state)}></ha-icon>
+                  </div>
+                  <div class="partition-name">${partition.index ? `P${partition.index}` : partition.title}</div>
                   <div class="partition-state">${partition.stateLabel}</div>
                 </button>
               `,
             )}
           </div>
 
-          <div class="section-label">PIN</div>
-          <div class="pin-display" aria-label="Wprowadzony PIN">${maskedPin}</div>
-
-          <div class="keypad">
-            ${this._renderKeyButton("1")}
-            ${this._renderKeyButton("2")}
-            ${this._renderKeyButton("3")}
-            ${this._renderKeyButton("4")}
-            ${this._renderKeyButton("5")}
-            ${this._renderKeyButton("6")}
-            ${this._renderKeyButton("7")}
-            ${this._renderKeyButton("8")}
-            ${this._renderKeyButton("9")}
-            <button class="key clear" @click=${this._clearPin}>C</button>
-            ${this._renderKeyButton("0")}
-            <button class="key clear" @click=${this._clearPin}>Wyczysc</button>
-          </div>
-
+          <div class="section-label">Akcje</div>
           <div class="actions">
             <button
               class="action primary"
-              ?disabled=${!canArmAway}
-              @click=${() => this._callAlarmService("alarm_arm_away")}
+              ?disabled=${!canArmAway || selectedCount === 0}
+              @click=${() => this._queueAction("alarm_arm_away")}
             >
               Uzbroj
             </button>
             <button
               class="action secondary"
-              ?disabled=${!canArmHome}
-              @click=${() => this._callAlarmService("alarm_arm_home")}
+              ?disabled=${!canArmHome || selectedCount === 0}
+              @click=${() => this._queueAction("alarm_arm_home")}
             >
               Uzbroj w domu
             </button>
-            <button class="action danger" @click=${() => this._callAlarmService("alarm_disarm")}>
+            <button
+              class="action danger"
+              ?disabled=${selectedCount === 0}
+              @click=${() => this._queueAction("alarm_disarm")}
+            >
               Rozbroj
             </button>
           </div>
+
+          ${this._pendingAction
+            ? html`
+                <div class="pin-panel">
+                  <div class="section-label">PIN</div>
+                  <div class="pin-display" aria-label="Wprowadzony PIN">${maskedPin}</div>
+
+                  <div class="keypad">
+                    ${this._renderKeyButton("1")}
+                    ${this._renderKeyButton("2")}
+                    ${this._renderKeyButton("3")}
+                    ${this._renderKeyButton("4")}
+                    ${this._renderKeyButton("5")}
+                    ${this._renderKeyButton("6")}
+                    ${this._renderKeyButton("7")}
+                    ${this._renderKeyButton("8")}
+                    ${this._renderKeyButton("9")}
+                    <button class="key clear" @click=${this._clearPin}>C</button>
+                    ${this._renderKeyButton("0")}
+                    <button class="key clear" @click=${this._clearPin}>Wyczysc</button>
+                  </div>
+
+                  <div class="confirm-row">
+                    <button class="confirm neutral" @click=${this._cancelPendingAction}>Anuluj</button>
+                    <button class="confirm accent" @click=${this._executePendingAction}>
+                      Potwierdz: ${pendingActionLabel} (${selectedCount})
+                    </button>
+                  </div>
+                </div>
+              `
+            : ""}
         </div>
       </ha-card>
     `;
@@ -296,170 +341,173 @@ class PulsonAlarmCard extends LitElement {
       }
 
       ha-card {
-        background: var(--ha-card-background, var(--card-background-color));
-        color: var(--primary-text-color);
-        border-radius: var(--ha-card-border-radius, 18px);
-        border: 1px solid color-mix(in srgb, var(--divider-color) 70%, transparent);
-        box-shadow:
-          0 10px 30px color-mix(in srgb, var(--primary-color) 10%, transparent),
-          0 1px 1px color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+        background: var(--ha-card-background, var(--card-background-color, #ffffff));
+        color: var(--primary-text-color, #111827);
+        border-radius: var(--ha-card-border-radius, 20px);
+        border: 1px solid var(--divider-color, #e2e8f0);
+        box-shadow: 0 10px 26px color-mix(in srgb, var(--primary-text-color, #111827) 8%, transparent);
       }
 
       .container {
-        padding: 16px;
+        padding: 14px;
         display: grid;
         gap: 10px;
       }
 
       .hero {
+        position: relative;
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 12px;
-        background: linear-gradient(
-          135deg,
-          color-mix(in srgb, var(--primary-color) 18%, transparent),
-          color-mix(in srgb, var(--accent-color) 14%, transparent)
-        );
-        border: 1px solid color-mix(in srgb, var(--divider-color) 70%, var(--primary-color));
+        background: var(--secondary-background-color, #f8fafc);
+        border: 1px solid var(--divider-color, #e2e8f0);
         border-radius: 14px;
         padding: 12px;
       }
 
-      .title {
-        font-size: 1.05rem;
+      .global-fault {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 6px 10px;
+        border: 1px solid #fcd34d;
+        background: #fef3c7;
+        color: #92400e;
+        font-size: 0.7rem;
         font-weight: 700;
-        color: var(--primary-text-color);
+      }
+
+      .global-fault ha-icon {
+        --mdc-icon-size: 14px;
+      }
+
+      .title {
+        font-size: 1.03rem;
+        font-weight: 700;
+        color: var(--primary-text-color, #111827);
       }
 
       .subtitle {
         margin-top: 2px;
-        font-size: 0.85rem;
-        color: var(--secondary-text-color);
+        font-size: 0.78rem;
+        color: var(--secondary-text-color, #64748b);
       }
 
       .status-pill {
         border-radius: 999px;
-        font-size: 0.78rem;
-        font-weight: 700;
-        padding: 7px 10px;
-        border: 1px solid var(--divider-color);
-        backdrop-filter: blur(4px);
-      }
-
-      .status-pill.armed {
-        color: var(--primary-color);
-        background: color-mix(in srgb, var(--primary-color) 15%, transparent);
-      }
-
-      .status-pill.disarmed {
-        color: var(--success-color, var(--state-icon-active-color, var(--primary-color)));
-        background: color-mix(in srgb, var(--success-color, var(--primary-color)) 15%, transparent);
-      }
-
-      .status-pill.triggered {
-        color: var(--error-color);
-        background: color-mix(in srgb, var(--error-color) 14%, transparent);
-      }
-
-      .status-pill.transition {
-        color: var(--warning-color, var(--accent-color));
-        background: color-mix(in srgb, var(--warning-color, var(--accent-color)) 12%, transparent);
-      }
-
-      .status-pill.offline {
-        color: var(--disabled-text-color);
-        background: color-mix(in srgb, var(--disabled-text-color) 10%, transparent);
-      }
-
-      .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-      }
-
-      .summary-tile {
-        border: 1px solid var(--divider-color);
-        border-radius: 12px;
-        padding: 10px;
-        background: var(--secondary-background-color);
-        display: grid;
-        gap: 2px;
-      }
-
-      .summary-tile span {
         font-size: 0.74rem;
-        color: var(--secondary-text-color);
-        text-transform: uppercase;
-        letter-spacing: 0.03rem;
-      }
-
-      .summary-tile strong {
-        font-size: 1.1rem;
-      }
-
-      .summary-tile.alert strong {
-        color: var(--error-color);
+        font-weight: 600;
+        padding: 7px 10px;
+        border: 1px solid var(--divider-color, #e2e8f0);
+        color: var(--secondary-text-color, #475569);
+        background: var(--ha-card-background, #ffffff);
       }
 
       .section-label {
         margin-top: 2px;
-        font-size: 0.72rem;
-        letter-spacing: 0.07em;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
         font-weight: 700;
-        color: var(--secondary-text-color);
+        color: var(--secondary-text-color, #64748b);
       }
 
       .partition-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 8px;
       }
 
       .partition {
-        border: 1px solid var(--divider-color);
-        border-radius: 12px;
-        background: var(--ha-card-background, var(--card-background-color));
-        color: var(--primary-text-color);
-        text-align: left;
-        padding: 10px;
+        border: 1px solid var(--divider-color, #e2e8f0);
+        border-radius: 14px;
+        background: var(--ha-card-background, #ffffff);
+        color: var(--primary-text-color, #111827);
+        min-height: 84px;
+        text-align: center;
+        padding: 10px 8px;
         display: grid;
-        gap: 3px;
+        place-items: center;
+        gap: 6px;
         cursor: pointer;
-        transition: border-color 0.2s ease, transform 0.06s ease, background 0.2s ease;
+        transition: border-color 0.2s ease, transform 0.06s ease, box-shadow 0.2s ease;
       }
 
       .partition.active {
-        border-color: var(--primary-color);
-        background: color-mix(in srgb, var(--primary-color) 10%, var(--ha-card-background, var(--card-background-color)));
-        box-shadow: 0 4px 14px color-mix(in srgb, var(--primary-color) 16%, transparent);
+        border-color: color-mix(in srgb, var(--primary-color, #3b82f6) 30%, var(--divider-color, #e2e8f0));
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color, #3b82f6) 22%, transparent);
+      }
+
+      .partition-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        border: 1px solid var(--divider-color, #e2e8f0);
+        display: grid;
+        place-items: center;
+      }
+
+      .partition-icon ha-icon {
+        --mdc-icon-size: 16px;
+      }
+
+      .partition-icon.armed {
+        color: var(--success-color, #16a34a);
+        background: color-mix(in srgb, var(--success-color, #16a34a) 10%, transparent);
+      }
+
+      .partition-icon.disarmed {
+        color: var(--warning-color, #f59e0b);
+        background: color-mix(in srgb, var(--warning-color, #f59e0b) 12%, transparent);
+      }
+
+      .partition-icon.alarm {
+        color: var(--error-color, #dc2626);
+        background: color-mix(in srgb, var(--error-color, #dc2626) 12%, transparent);
+      }
+
+      .partition-icon.arming,
+      .partition-icon.disarming {
+        color: var(--primary-color, #3b82f6);
+        background: color-mix(in srgb, var(--primary-color, #3b82f6) 10%, transparent);
+      }
+
+      .partition-icon.offline {
+        color: var(--disabled-text-color, #9ca3af);
+        background: color-mix(in srgb, var(--disabled-text-color, #9ca3af) 10%, transparent);
       }
 
       .partition-name {
-        font-size: 0.86rem;
-        font-weight: 700;
+        font-size: 0.74rem;
+        font-weight: 650;
       }
 
       .partition-state {
-        font-size: 0.78rem;
-        color: var(--secondary-text-color);
+        font-size: 0.66rem;
+        color: var(--secondary-text-color, #64748b);
+        line-height: 1.2;
       }
 
-      .partition.triggered .partition-state {
-        color: var(--error-color);
-      }
-
-      .partition.disarmed .partition-state {
-        color: var(--success-color, var(--state-icon-active-color, var(--primary-color)));
+      .pin-panel {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid var(--divider-color, #e2e8f0);
+        border-radius: 14px;
+        background: var(--secondary-background-color, #f8fafc);
       }
 
       .pin-display {
         min-height: 46px;
         border-radius: 12px;
-        border: 1px solid var(--divider-color);
-        background: color-mix(in srgb, var(--secondary-background-color) 86%, var(--ha-card-background, var(--card-background-color)));
-        color: var(--primary-text-color);
+        border: 1px solid var(--divider-color, #e2e8f0);
+        background: var(--ha-card-background, #ffffff);
+        color: var(--primary-text-color, #111827);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -487,13 +535,13 @@ class PulsonAlarmCard extends LitElement {
       }
 
       .key {
-        background: var(--secondary-background-color);
-        color: var(--primary-text-color);
-        border: 1px solid var(--divider-color);
+        background: var(--ha-card-background, #ffffff);
+        color: var(--primary-text-color, #111827);
+        border: 1px solid var(--divider-color, #e2e8f0);
       }
 
       .key.clear {
-        color: var(--secondary-text-color);
+        color: var(--secondary-text-color, #64748b);
       }
 
       .actions {
@@ -503,18 +551,21 @@ class PulsonAlarmCard extends LitElement {
       }
 
       .action.primary {
-        background: var(--primary-color);
+        background: var(--primary-text-color, #111827);
         color: var(--text-primary-color, #fff);
+        border-color: var(--primary-text-color, #111827);
       }
 
       .action.secondary {
-        background: var(--accent-color);
-        color: var(--text-primary-color, #fff);
+        background: var(--ha-card-background, #ffffff);
+        color: var(--primary-text-color, #111827);
+        border-color: var(--divider-color, #e2e8f0);
       }
 
       .action.danger {
-        background: var(--error-color);
-        color: var(--text-primary-color, #fff);
+        background: color-mix(in srgb, var(--error-color, #dc2626) 10%, transparent);
+        color: var(--error-color, #dc2626);
+        border-color: color-mix(in srgb, var(--error-color, #dc2626) 25%, var(--divider-color, #e2e8f0));
       }
 
       .action:disabled {
@@ -533,6 +584,32 @@ class PulsonAlarmCard extends LitElement {
       .partition:hover,
       .action:hover {
         filter: brightness(1.05);
+      }
+
+      .confirm-row {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 8px;
+      }
+
+      .confirm {
+        min-height: 44px;
+        border-radius: 12px;
+        border: 1px solid var(--divider-color, #e2e8f0);
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+
+      .confirm.neutral {
+        background: var(--ha-card-background, #ffffff);
+        color: var(--secondary-text-color, #64748b);
+      }
+
+      .confirm.accent {
+        background: var(--primary-text-color, #111827);
+        color: var(--text-primary-color, #fff);
+        border-color: var(--primary-text-color, #111827);
       }
 
       @media (max-width: 420px) {
@@ -571,14 +648,12 @@ class PulsonAlarmCard extends LitElement {
         .summary-grid,
         .section-label,
         .partition-grid,
-        .pin-display,
-        .keypad,
         .actions {
           grid-column: 1 / -1;
         }
 
         .partition-grid {
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(3, 1fr);
         }
       }
 
