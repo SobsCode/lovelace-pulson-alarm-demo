@@ -11,6 +11,8 @@ class PulsonAlarmCard extends LitElement {
       _pin: { state: true },
       _selectedEntities: { state: true },
       _pendingAction: { state: true },
+      _isSubmitting: { state: true },
+      _feedback: { state: true },
     };
   }
 
@@ -21,6 +23,8 @@ class PulsonAlarmCard extends LitElement {
     this._pin = "";
     this._selectedEntities = [];
     this._pendingAction = null;
+    this._isSubmitting = false;
+    this._feedback = null;
   }
 
   setConfig(config) {
@@ -156,6 +160,19 @@ class PulsonAlarmCard extends LitElement {
     });
   }
 
+  _getGlobalFaultText(partitions) {
+    const tags = [];
+    partitions.forEach((partition) => {
+      const attrs = partition.entity.attributes || {};
+      if (attrs.tamper === true) tags.push("sabotaż");
+      if (attrs.communication_lost === true) tags.push("łączność");
+      if (attrs.system_fault === true || attrs.fault === true || attrs.trouble === true) tags.push("usterka");
+    });
+    const unique = [...new Set(tags)];
+    if (!unique.length) return "Usterka systemu";
+    return `Usterka: ${unique.join(", ")}`;
+  }
+
   _togglePartition(entityId) {
     if (this._selectedEntities.includes(entityId)) {
       this._selectedEntities = this._selectedEntities.filter((id) => id !== entityId);
@@ -177,16 +194,19 @@ class PulsonAlarmCard extends LitElement {
     if (!this._selectedEntities.length) return;
     this._pendingAction = service;
     this._pin = "";
+    this._feedback = null;
   }
 
   _cancelPendingAction() {
     this._pendingAction = null;
     this._pin = "";
+    this._isSubmitting = false;
   }
 
   async _executePendingAction() {
-    if (!this._hass || !this._pendingAction || !this._selectedEntities.length) return;
+    if (!this._hass || !this._pendingAction || !this._selectedEntities.length || this._isSubmitting) return;
 
+    this._isSubmitting = true;
     try {
       await Promise.all(
         this._selectedEntities.map((entityId) =>
@@ -196,9 +216,30 @@ class PulsonAlarmCard extends LitElement {
           }),
         ),
       );
+      this._feedback = { type: "success", text: `Wykonano akcje dla ${this._selectedEntities.length} partycji.` };
+    } catch (_error) {
+      this._feedback = { type: "error", text: "Wystapil blad podczas wysylania komendy." };
     } finally {
+      this._isSubmitting = false;
       this._cancelPendingAction();
     }
+  }
+
+  _actionSupportIssue(action, selectedPartitions) {
+    if (!selectedPartitions.length) return "Wybierz co najmniej jedna partycje.";
+    if (action === "alarm_arm_away") {
+      const unsupported = selectedPartitions.some(
+        (p) => (Number(p.entity.attributes.supported_features || 0) & ALARM_FEATURE_ARM_AWAY) === 0,
+      );
+      if (unsupported) return "Niektore zaznaczone partycje nie wspieraja opcji Uzbroj.";
+    }
+    if (action === "alarm_arm_home") {
+      const unsupported = selectedPartitions.some(
+        (p) => (Number(p.entity.attributes.supported_features || 0) & ALARM_FEATURE_ARM_HOME) === 0,
+      );
+      if (unsupported) return "Niektore zaznaczone partycje nie wspieraja opcji Uzbroj w domu.";
+    }
+    return "";
   }
 
   _renderKeyButton(label, value = label) {
@@ -237,6 +278,14 @@ class PulsonAlarmCard extends LitElement {
     const maskedPin = this._pin.length ? "*".repeat(this._pin.length) : "-";
     const selectedCount = selectedPartitions.length;
     const hasGlobalFault = this._hasGlobalFault(partitions);
+    const globalFaultText = this._getGlobalFaultText(partitions);
+    const selectedSummary = selectedPartitions
+      .map((p) => (p.index ? `P${p.index}` : p.title))
+      .slice(0, 4)
+      .join(", ");
+    const selectedOverflow = selectedPartitions.length > 4 ? ` +${selectedPartitions.length - 4}` : "";
+    const armAwayIssue = this._actionSupportIssue("alarm_arm_away", selectedPartitions);
+    const armHomeIssue = this._actionSupportIssue("alarm_arm_home", selectedPartitions);
 
     const pendingActionLabel = {
       alarm_arm_away: "Uzbroj",
@@ -248,13 +297,18 @@ class PulsonAlarmCard extends LitElement {
       <ha-card>
         <div class="container">
           <div class="hero">
-            ${hasGlobalFault ? html`<div class="global-fault"><ha-icon icon="mdi:alert-outline"></ha-icon> Usterka systemu</div>` : ""}
+            ${hasGlobalFault
+              ? html`<div class="global-fault" title=${globalFaultText}>
+                  <ha-icon icon="mdi:alert-outline"></ha-icon> ${globalFaultText}
+                </div>`
+              : ""}
             <div>
               <div class="title">${this._config.name}</div>
               <div class="subtitle">Zaznaczone partycje: ${selectedCount}</div>
             </div>
             <div class="status-pill">${this._pendingAction ? `Akcja: ${pendingActionLabel}` : "Gotowy"}</div>
           </div>
+          ${this._feedback ? html`<div class="feedback ${this._feedback.type}" role="status">${this._feedback.text}</div>` : ""}
 
           <div class="section-label">Partycje</div>
           <div class="partition-grid">
@@ -263,6 +317,8 @@ class PulsonAlarmCard extends LitElement {
                 <button
                   class="partition ${partition.stateClass} ${this._selectedEntities.includes(partition.entityId) ? "active" : ""}"
                   @click=${() => this._togglePartition(partition.entityId)}
+                  aria-label=${`${partition.title}, stan: ${partition.stateLabel}`}
+                  title=${`${partition.title}: ${partition.stateLabel}`}
                 >
                   <div class="partition-icon ${partition.stateClass}">
                     <ha-icon icon=${this._stateIcon(partition.entity.state)}></ha-icon>
@@ -279,6 +335,7 @@ class PulsonAlarmCard extends LitElement {
             <button
               class="action primary"
               ?disabled=${!canArmAway || selectedCount === 0}
+              title=${armAwayIssue}
               @click=${() => this._queueAction("alarm_arm_away")}
             >
               Uzbroj
@@ -286,6 +343,7 @@ class PulsonAlarmCard extends LitElement {
             <button
               class="action secondary"
               ?disabled=${!canArmHome || selectedCount === 0}
+              title=${armHomeIssue}
               @click=${() => this._queueAction("alarm_arm_home")}
             >
               Uzbroj w domu
@@ -303,6 +361,7 @@ class PulsonAlarmCard extends LitElement {
             ? html`
                 <div class="pin-panel">
                   <div class="section-label">PIN</div>
+                  <div class="selection-preview">Wybrane: ${selectedSummary}${selectedOverflow}</div>
                   <div class="pin-display" aria-label="Wprowadzony PIN">${maskedPin}</div>
 
                   <div class="keypad">
@@ -321,9 +380,11 @@ class PulsonAlarmCard extends LitElement {
                   </div>
 
                   <div class="confirm-row">
-                    <button class="confirm neutral" @click=${this._cancelPendingAction}>Anuluj</button>
-                    <button class="confirm accent" @click=${this._executePendingAction}>
-                      Potwierdz: ${pendingActionLabel} (${selectedCount})
+                    <button class="confirm neutral" ?disabled=${this._isSubmitting} @click=${this._cancelPendingAction}>
+                      Anuluj
+                    </button>
+                    <button class="confirm accent" ?disabled=${this._isSubmitting} @click=${this._executePendingAction}>
+                      ${this._isSubmitting ? "Wysylanie..." : `Potwierdz: ${pendingActionLabel} (${selectedCount})`}
                     </button>
                   </div>
                 </div>
@@ -380,6 +441,10 @@ class PulsonAlarmCard extends LitElement {
         color: #92400e;
         font-size: 0.7rem;
         font-weight: 700;
+        max-width: 66%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .global-fault ha-icon {
@@ -417,6 +482,23 @@ class PulsonAlarmCard extends LitElement {
         color: var(--secondary-text-color, #64748b);
       }
 
+      .feedback {
+        border-radius: 10px;
+        border: 1px solid var(--divider-color, #e2e8f0);
+        padding: 8px 10px;
+        font-size: 0.75rem;
+      }
+
+      .feedback.success {
+        color: var(--success-color, #16a34a);
+        background: color-mix(in srgb, var(--success-color, #16a34a) 9%, transparent);
+      }
+
+      .feedback.error {
+        color: var(--error-color, #dc2626);
+        background: color-mix(in srgb, var(--error-color, #dc2626) 10%, transparent);
+      }
+
       .partition-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -436,6 +518,20 @@ class PulsonAlarmCard extends LitElement {
         gap: 6px;
         cursor: pointer;
         transition: border-color 0.2s ease, transform 0.06s ease, box-shadow 0.2s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .partition::after {
+        content: "";
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        bottom: 6px;
+        height: 3px;
+        border-radius: 999px;
+        opacity: 0.5;
+        background: color-mix(in srgb, var(--disabled-text-color, #9ca3af) 35%, transparent);
       }
 
       .partition.active {
@@ -482,6 +578,27 @@ class PulsonAlarmCard extends LitElement {
         background: color-mix(in srgb, var(--disabled-text-color, #9ca3af) 10%, transparent);
       }
 
+      .partition.armed::after {
+        background: color-mix(in srgb, var(--success-color, #16a34a) 45%, transparent);
+      }
+
+      .partition.disarmed::after {
+        background: color-mix(in srgb, var(--warning-color, #f59e0b) 45%, transparent);
+      }
+
+      .partition.alarm::after {
+        background: color-mix(in srgb, var(--error-color, #dc2626) 45%, transparent);
+      }
+
+      .partition.arming::after,
+      .partition.disarming::after {
+        background: color-mix(in srgb, var(--primary-color, #3b82f6) 45%, transparent);
+      }
+
+      .partition.offline::after {
+        background: color-mix(in srgb, var(--disabled-text-color, #9ca3af) 50%, transparent);
+      }
+
       .partition-name {
         font-size: 0.74rem;
         font-weight: 650;
@@ -515,6 +632,11 @@ class PulsonAlarmCard extends LitElement {
         font-size: 1.2rem;
         font-weight: 700;
         user-select: none;
+      }
+
+      .selection-preview {
+        font-size: 0.72rem;
+        color: var(--secondary-text-color, #64748b);
       }
 
       .keypad {
@@ -612,6 +734,11 @@ class PulsonAlarmCard extends LitElement {
         border-color: var(--primary-text-color, #111827);
       }
 
+      .confirm:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
       @media (max-width: 420px) {
         .hero {
           padding: 10px;
@@ -623,14 +750,6 @@ class PulsonAlarmCard extends LitElement {
 
         .subtitle {
           font-size: 0.8rem;
-        }
-
-        .summary-tile {
-          padding: 8px;
-        }
-
-        .summary-tile strong {
-          font-size: 1rem;
         }
 
         .partition-grid {
@@ -645,10 +764,10 @@ class PulsonAlarmCard extends LitElement {
         }
 
         .hero,
-        .summary-grid,
         .section-label,
         .partition-grid,
-        .actions {
+        .actions,
+        .feedback {
           grid-column: 1 / -1;
         }
 
