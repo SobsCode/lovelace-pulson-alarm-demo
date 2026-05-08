@@ -101,18 +101,38 @@ class PulsonAlarmCard extends LitElement {
     return "mdi:shield-outline";
   }
 
-  _discoverEntityGroup(seedEntityId) {
-    const seedMatch = seedEntityId.match(/^(alarm_control_panel\..+)_p([1-8])$/);
-    if (!seedMatch) return [seedEntityId];
+  _parsePartitionEntityId(entityId) {
+    const newFormatMatch = entityId.match(/^(alarm_control_panel\..+)_partition_(\d+)$/);
+    if (newFormatMatch) {
+      return {
+        base: newFormatMatch[1],
+        index: Number(newFormatMatch[2]),
+        format: "partition",
+      };
+    }
 
-    const base = seedMatch[1];
+    const legacyFormatMatch = entityId.match(/^(alarm_control_panel\..+)_p([1-8])$/);
+    if (legacyFormatMatch) {
+      return {
+        base: legacyFormatMatch[1],
+        index: Number(legacyFormatMatch[2]),
+        format: "legacy",
+      };
+    }
+
+    return null;
+  }
+
+  _discoverEntityGroup(seedEntityId) {
+    const seedInfo = this._parsePartitionEntityId(seedEntityId);
+    if (!seedInfo) return [seedEntityId];
+
+    const { base } = seedInfo;
     const discovered = Object.keys(this._hass.states)
-      .filter((id) => id.startsWith(`${base}_p`) && /^alarm_control_panel\..+_p[1-8]$/.test(id))
-      .sort((a, b) => {
-        const pa = Number(a.match(/_p([1-8])$/)?.[1] || 99);
-        const pb = Number(b.match(/_p([1-8])$/)?.[1] || 99);
-        return pa - pb;
-      })
+      .map((id) => ({ id, parsed: this._parsePartitionEntityId(id) }))
+      .filter((entry) => entry.parsed && entry.parsed.base === base)
+      .sort((a, b) => a.parsed.index - b.parsed.index)
+      .map((entry) => entry.id)
       .slice(0, 8);
 
     return discovered.length ? discovered : [seedEntityId];
@@ -133,8 +153,8 @@ class PulsonAlarmCard extends LitElement {
         const entity = this._hass.states[entityId];
         if (!entity) return null;
 
-        const indexMatch = entityId.match(/_p([1-8])$/);
-        const index = indexMatch ? Number(indexMatch[1]) : null;
+        const parsedEntityId = this._parsePartitionEntityId(entityId);
+        const index = parsedEntityId ? parsedEntityId.index : null;
 
         return {
           entityId,
