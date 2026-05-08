@@ -63,3 +63,26 @@ entities:
 - Provide either `entity` or `entities`.
 - Only domain `alarm_control_panel` is supported.
 - The PIN input is cleared automatically after every action call.
+
+## Pulson Guard Card (v1)
+
+Modern, dark, mobile-inspired card with:
+- hero status
+- panel/bridge health
+- active faults summary
+- partition multi-select
+- action dock + PIN confirmation sheet
+
+Add resource:
+
+- `/hacsfiles/lovelace-pulson-alarm-demo/pulson-guard-card.js`
+  (or `/local/pulson-guard-card.js` for manual install)
+
+Example config:
+
+```yaml
+type: custom:pulson-guard-card
+name: Pulson Guard
+gateway_slug: pulson_security_integration_gateway
+entity: alarm_control_panel.pulson_security_integration_gateway_partition_1
+```
