@@ -111,6 +111,15 @@ class PulsonAlarmCard extends LitElement {
       };
     }
 
+    const oldPulsonFormatMatch = entityId.match(/^(alarm_control_panel\..+)_pulson_partition_(\d+)$/);
+    if (oldPulsonFormatMatch) {
+      return {
+        base: oldPulsonFormatMatch[1],
+        index: Number(oldPulsonFormatMatch[2]),
+        format: "old-pulson",
+      };
+    }
+
     const legacyFormatMatch = entityId.match(/^(alarm_control_panel\..+)_p([1-8])$/);
     if (legacyFormatMatch) {
       return {
@@ -123,15 +132,34 @@ class PulsonAlarmCard extends LitElement {
     return null;
   }
 
+  _guessPartitionBase(entityId) {
+    if (typeof entityId !== "string" || !entityId.startsWith("alarm_control_panel.")) return null;
+    const withoutSuffix = entityId
+      .replace(/_pulson_partition_\d+$/, "")
+      .replace(/_partition_\d+$/, "")
+      .replace(/_p[1-8]$/, "");
+    return withoutSuffix;
+  }
+
   _discoverEntityGroup(seedEntityId) {
     const seedInfo = this._parsePartitionEntityId(seedEntityId);
-    if (!seedInfo) return [seedEntityId];
+    const guessedBase = this._guessPartitionBase(seedEntityId);
+    const base = seedInfo?.base || guessedBase;
+    if (!base) return [seedEntityId];
 
-    const { base } = seedInfo;
     const discovered = Object.keys(this._hass.states)
       .map((id) => ({ id, parsed: this._parsePartitionEntityId(id) }))
-      .filter((entry) => entry.parsed && entry.parsed.base === base)
-      .sort((a, b) => a.parsed.index - b.parsed.index)
+      .filter(
+        (entry) =>
+          entry.id.startsWith(`${base}_`) &&
+          (entry.parsed?.base === base || entry.id.startsWith(`${base}_partition_`) || entry.id.startsWith(`${base}_`)),
+      )
+      .sort((a, b) => {
+        const ai = a.parsed?.index ?? 999;
+        const bi = b.parsed?.index ?? 999;
+        if (ai !== bi) return ai - bi;
+        return a.id.localeCompare(b.id);
+      })
       .map((entry) => entry.id)
       .slice(0, 8);
 
