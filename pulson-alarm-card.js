@@ -141,6 +141,39 @@ class PulsonAlarmCard extends LitElement {
     return withoutSuffix;
   }
 
+  _rewriteLegacyEntityId(entityId) {
+    if (typeof entityId !== "string") return entityId;
+    return entityId.replace(/_pulson_partition_(\d+)$/, "_partition_$1");
+  }
+
+  _resolveEntityCandidates(entityId) {
+    if (typeof entityId !== "string") return [];
+    const candidates = [entityId];
+    const rewritten = this._rewriteLegacyEntityId(entityId);
+    if (rewritten !== entityId) candidates.push(rewritten);
+    return [...new Set(candidates)];
+  }
+
+  _resolveConfiguredEntityIds(entityIds) {
+    if (!this._hass || !Array.isArray(entityIds)) return [];
+
+    const resolved = [];
+    entityIds.forEach((entityId) => {
+      const candidates = this._resolveEntityCandidates(entityId);
+      const direct = candidates.find((candidate) => this._hass.states[candidate]);
+      if (direct) {
+        resolved.push(direct);
+        return;
+      }
+
+      candidates.forEach((candidate) => {
+        this._discoverEntityGroup(candidate).forEach((id) => resolved.push(id));
+      });
+    });
+
+    return [...new Set(resolved)];
+  }
+
   _discoverEntityGroup(seedEntityId) {
     const seedInfo = this._parsePartitionEntityId(seedEntityId);
     const guessedBase = this._guessPartitionBase(seedEntityId);
@@ -171,9 +204,10 @@ class PulsonAlarmCard extends LitElement {
 
     let entityIds = [];
     if (this._config.entities?.length) {
-      entityIds = this._config.entities;
+      entityIds = this._resolveConfiguredEntityIds(this._config.entities);
     } else if (this._config.entity) {
-      entityIds = this._discoverEntityGroup(this._config.entity);
+      const resolved = this._resolveConfiguredEntityIds([this._config.entity]);
+      entityIds = resolved.length ? resolved : this._discoverEntityGroup(this._config.entity);
     }
 
     return entityIds
