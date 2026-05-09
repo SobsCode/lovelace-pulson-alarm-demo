@@ -17,6 +17,7 @@ class PulsonAlarmCard extends LitElement {
       _feedback: { state: true },
       _panicSlider: { state: true },
       _panicResetting: { state: true },
+      _pendingTargets: { state: true },
     };
   }
 
@@ -32,6 +33,8 @@ class PulsonAlarmCard extends LitElement {
     this._feedback = null;
     this._panicSlider = 0;
     this._panicResetting = false;
+    this._pendingTargets = null;
+    this._panicHoldTimer = null;
   }
 
   setConfig(config) {
@@ -118,7 +121,7 @@ class PulsonAlarmCard extends LitElement {
           entityId,
           index,
           entity,
-          title: entity.attributes.friendly_name || (index ? `Partycja ${index}` : entityId),
+          title: this._shortPartitionName(entity.attributes.friendly_name || (index ? `Partycja ${index}` : entityId), index),
         };
       })
       .filter(Boolean)
@@ -194,6 +197,15 @@ class PulsonAlarmCard extends LitElement {
 
   _setAllPartitionsAction(action) {
     this._pendingAction = action;
+    this._pendingTargets = null;
+    this._pin = "";
+    this._feedback = null;
+    this._drawerOpen = true;
+  }
+
+  _setSinglePartitionAction(partition, action) {
+    this._pendingAction = action;
+    this._pendingTargets = [partition.entityId];
     this._pin = "";
     this._feedback = null;
     this._drawerOpen = true;
@@ -213,10 +225,40 @@ class PulsonAlarmCard extends LitElement {
     return map[action];
   }
 
+  _primaryActionForPartition(partition) {
+    const actions = this._allowedActions(partition);
+    if (!actions.length) return null;
+    if (actions.includes("alarm_disarm")) return "alarm_disarm";
+    if (actions.includes("alarm_arm_away")) return "alarm_arm_away";
+    if (actions.includes("alarm_arm_night")) return "alarm_arm_night";
+    if (actions.includes("alarm_arm_home")) return "alarm_arm_home";
+    return actions[0];
+  }
+
+  _shortPartitionName(name, index) {
+    if (!name) return index ? `Partycja ${index}` : "Partycja";
+    const slugLabel = this._config.gateway_slug
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+
+    let short = name
+      .replace(/^Pulson Security Integration Gateway[\s\-_]*/i, "")
+      .replace(new RegExp(`^${slugLabel}[\\s\\-_]*`, "i"), "")
+      .replace(/^Gateway[\s\-_]*/i, "")
+      .trim();
+
+    if (!short) short = index ? `Partycja ${index}` : name;
+    return short;
+  }
+
   async _confirmPendingAction() {
     if (!this._pendingAction || this._isSending) return;
     const partitions = this._partitions();
-    const targets = partitions.filter((p) => this._allowedActions(p).includes(this._pendingAction));
+    const scopedPartitions = this._pendingTargets?.length
+      ? partitions.filter((p) => this._pendingTargets.includes(p.entityId))
+      : partitions;
+    const targets = scopedPartitions.filter((p) => this._allowedActions(p).includes(this._pendingAction));
     if (!targets.length) return;
     this._isSending = true;
     try {
@@ -234,6 +276,7 @@ class PulsonAlarmCard extends LitElement {
     } finally {
       this._isSending = false;
       this._pendingAction = null;
+      this._pendingTargets = null;
       this._pin = "";
     }
   }
@@ -248,19 +291,35 @@ class PulsonAlarmCard extends LitElement {
   _updatePanicSlider(value) {
     const normalized = Number(value);
     this._panicSlider = normalized;
-    if (normalized >= 100) {
-      if (navigator.vibrate) navigator.vibrate(200);
-      this._triggerPanic();
-      setTimeout(() => {
-        this._panicResetting = true;
-        this._panicSlider = 0;
-        setTimeout(() => {
-          this._panicResetting = false;
-        }, 450);
-      }, 180);
+    if (normalized >= 100 && !this._panicHoldTimer) {
+      if (navigator.vibrate) navigator.vibrate(120);
+      this._panicHoldTimer = setTimeout(() => {
+        this._panicHoldTimer = null;
+        if (this._panicSlider >= 100) {
+          if (navigator.vibrate) navigator.vibrate([100, 60, 140]);
+          this._triggerPanic();
+          this._resetPanicSlider();
+        }
+      }, 280);
       return;
     }
     if (normalized >= 90 && navigator.vibrate) navigator.vibrate(40);
+  }
+
+  _resetPanicSlider() {
+    if (this._panicHoldTimer) {
+      clearTimeout(this._panicHoldTimer);
+      this._panicHoldTimer = null;
+    }
+    this._panicResetting = true;
+    this._panicSlider = 0;
+    setTimeout(() => {
+      this._panicResetting = false;
+    }, 260);
+  }
+
+  _handlePanicRelease() {
+    if (this._panicSlider < 100) this._resetPanicSlider();
   }
 
   render() {
@@ -326,6 +385,17 @@ class PulsonAlarmCard extends LitElement {
                     </div>
                     <div class="partition-status">${this._stateLabel(partition.entity.state)}</div>
                   </div>
+                  ${this._primaryActionForPartition(partition)
+                    ? html`
+                        <button
+                          class="quick-action"
+                          title=${this._actionUi(this._primaryActionForPartition(partition)).label}
+                          @click=${() => this._setSinglePartitionAction(partition, this._primaryActionForPartition(partition))}
+                        >
+                          <ha-icon icon=${this._actionUi(this._primaryActionForPartition(partition)).icon}></ha-icon>
+                        </button>
+                      `
+                    : ""}
                   <button class="expand-btn ${expanded ? "rotated" : ""}" @click=${() => this._togglePartitionExpansion(partition.id)}>
                     <ha-icon icon="mdi:chevron-down"></ha-icon>
                   </button>
@@ -366,6 +436,9 @@ class PulsonAlarmCard extends LitElement {
               ? html`
                   <div class="pin-panel">
                     <div class="pin-title">${pendingUi?.label}</div>
+                    <div class="pin-subtitle">
+                      ${this._pendingTargets?.length ? "Tryb dla pojedynczej partycji" : "Tryb globalny dla wszystkich kompatybilnych partycji"}
+                    </div>
                     <div class="pin-display">${this._pin.length ? "•".repeat(this._pin.length) : "—"}</div>
                     <div class="keys">
                       ${["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => html`<button class="key" @click=${() => (this._pin = `${this._pin}${d}`)}>${d}</button>`)}
@@ -388,18 +461,28 @@ class PulsonAlarmCard extends LitElement {
                 <ha-icon icon="mdi:alarm-light"></ha-icon>
                 <span>Alarm napadowy</span>
               </div>
-              <input
-                class="panic-slider ${this._panicResetting ? "resetting" : ""}"
-                type="range"
-                min="0"
-                max="100"
-                .value=${String(this._panicSlider)}
-                @input=${(e) => this._updatePanicSlider(e.target.value)}
-                @change=${() => {
-                  if (this._panicSlider < 100) this._updatePanicSlider(0);
-                }}
-              />
-              <div class="panic-hint">${this._config.panic_service ? "Przesuń do końca, aby aktywować PANIC." : "Ustaw panic_service w config, aby aktywować."}</div>
+              <div class="panic-track">
+                <div class="panic-progress" style=${`width:${this._panicSlider}%`}></div>
+                <input
+                  class="panic-slider ${this._panicResetting ? "resetting" : ""}"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  .value=${String(this._panicSlider)}
+                  @input=${(e) => this._updatePanicSlider(e.target.value)}
+                  @change=${this._handlePanicRelease}
+                  @mouseup=${this._handlePanicRelease}
+                  @touchend=${this._handlePanicRelease}
+                />
+              </div>
+              <div class="panic-hint">
+                ${this._config.panic_service
+                  ? this._panicSlider >= 100
+                    ? "Przytrzymaj chwilę na końcu, aby potwierdzić PANIC."
+                    : "Przeciągnij i przytrzymaj na końcu, aby aktywować PANIC."
+                  : "Ustaw panic_service w config, aby aktywować."}
+              </div>
             </div>
           </div>
         </div>
@@ -483,6 +566,18 @@ class PulsonAlarmCard extends LitElement {
       .partition-title .name { font-size: 0.82rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .id-label { font-size: 0.65rem; border-radius: 5px; padding: 2px 5px; background: color-mix(in srgb, #ffffff 10%, transparent); color: #abb6ca; }
       .partition-status { font-size: 0.73rem; color: #9eabc0; margin-top: 2px; }
+      .quick-action {
+        border: 1px solid color-mix(in srgb, #ffffff 20%, transparent);
+        background: color-mix(in srgb, #ffffff 5%, transparent);
+        color: #d8e0f0;
+        border-radius: 10px;
+        min-width: 36px;
+        min-height: 36px;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+      .quick-action ha-icon { --mdc-icon-size: 18px; }
       .expand-btn {
         border: none; background: transparent; color: #b7c1d3; cursor: pointer;
         transition: transform 0.2s ease;
@@ -516,6 +611,7 @@ class PulsonAlarmCard extends LitElement {
 
       .pin-panel { margin-bottom: 12px; }
       .pin-title { font-size: 0.8rem; font-weight: 700; margin-bottom: 8px; }
+      .pin-subtitle { font-size: 0.7rem; color: #aeb8cb; margin-bottom: 8px; }
       .pin-display {
         min-height: 42px; border-radius: 10px; border: 1px solid color-mix(in srgb, #ffffff 18%, transparent);
         display: grid; place-items: center; letter-spacing: 0.3rem; margin-bottom: 8px;
@@ -540,8 +636,51 @@ class PulsonAlarmCard extends LitElement {
       }
       .panic-header { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.8rem; margin-bottom: 8px; }
       .panic-header ha-icon { color: #ff7277; }
-      .panic-slider { width: 100%; accent-color: #ef4444; }
-      .panic-slider.resetting { transition: all 0.4s ease; }
+      .panic-track {
+        position: relative;
+        height: 50px;
+        border-radius: 999px;
+        background: color-mix(in srgb, #ffffff 6%, transparent);
+        border: 1px solid color-mix(in srgb, #ffffff 16%, transparent);
+        overflow: hidden;
+      }
+      .panic-progress {
+        position: absolute;
+        inset: 0 auto 0 0;
+        background: linear-gradient(90deg, rgba(239, 68, 68, 0.25), rgba(239, 68, 68, 0.55));
+        pointer-events: none;
+      }
+      .panic-slider {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        margin: 0;
+        background: transparent;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+      .panic-slider::-webkit-slider-runnable-track { height: 50px; background: transparent; }
+      .panic-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 42px;
+        height: 42px;
+        margin-top: 4px;
+        border-radius: 999px;
+        border: 2px solid #ffffff;
+        background: #ef4444;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.45);
+      }
+      .panic-slider::-moz-range-track { height: 50px; background: transparent; border: none; }
+      .panic-slider::-moz-range-thumb {
+        width: 42px;
+        height: 42px;
+        border: 2px solid #ffffff;
+        border-radius: 999px;
+        background: #ef4444;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.45);
+      }
+      .panic-slider.resetting { transition: all 0.25s ease; }
       .panic-hint { margin-top: 6px; font-size: 0.69rem; color: #a8b3c7; }
 
       .empty { color: var(--error-color, #ff5b62); font-weight: 700; padding: 12px; }
