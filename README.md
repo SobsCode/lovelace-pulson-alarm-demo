@@ -1,88 +1,77 @@
 # Pulson Alarm Card
 
-`pulson-alarm-card` is a custom Lovelace card for Home Assistant that provides a modern alarm interface for one or multiple `alarm_control_panel` entities (up to 8 partitions).
+`pulson-alarm-card` is a modern Lovelace card for Home Assistant designed for the Pulson integration (`pulson_security_integration_gateway`).
 
-## Features
+The interface is rebuilt from scratch with a mobile-first, premium dark design inspired by streaming apps, while keeping alarm-system safety and clarity as the top priority.
 
-- Modern hero header with active partition and state
-- Live status overview for available partitions (up to 8)
-- Automatic partition discovery for entities named like `..._p1` to `..._p8`
-- Multi-select support for partitions (execute one action on many partitions at once)
-- PIN keypad shown only after action selection (`Uzbroj`, `Uzbroj w domu`, `Rozbroj`)
-- Two-step secure flow: choose action -> enter PIN -> confirm
-- Action buttons:
-  - `Uzbroj` (arm away)
-  - `Uzbroj w domu` (arm home)
-  - `Rozbroj` (disarm)
-- Calls Home Assistant alarm services with PIN code for selected partition
-- Fully theme-friendly styling using standard HA CSS variables
+## What this card provides
 
-## HACS Installation
+- Hero security state (safe / armed / alarm)
+- Gateway health status (panel online, bridge online, service mode)
+- Active fault summary (from Pulson trouble sensors)
+- Multi-partition selection (up to 8 partitions)
+- Dynamic actions based on partition state and features:
+  - Arm Away
+  - Arm Home
+  - Arm Night
+  - Disarm
+- Secure two-step flow:
+  1. choose action
+  2. enter PIN and confirm
+- Action feedback with:
+  - `last_partition_command_status`
+  - `last_partition_code_valid`
+
+## Installation (HACS)
 
 1. Open HACS in Home Assistant.
-2. Add this repository as a **Custom repository** of type **Dashboard**.
+2. Add this repository as a **Custom repository** with type **Dashboard**.
 3. Install **Pulson Alarm Card**.
-4. Restart Home Assistant (or reload frontend resources if needed).
+4. Ensure Lovelace resource exists:
+   - `/hacsfiles/lovelace-pulson-alarm-demo/pulson-alarm-card-v2.js`
+   - type: `JavaScript Module`
+5. Hard refresh the browser (`Ctrl+F5`).
 
-After installation, add the resource if HACS does not add it automatically:
+## Installation (manual)
 
-`/hacsfiles/lovelace-pulson-alarm-demo/pulson-alarm-card.js`
-
-Resource type: `JavaScript Module`
-
-## Manual Installation
-
-1. Copy `pulson-alarm-card.js` to your Home Assistant `www` folder.
-2. Add a Lovelace resource:
-   - URL: `/local/pulson-alarm-card.js`
+1. Copy `pulson-alarm-card-v2.js` into Home Assistant `www` directory.
+2. Add Lovelace resource:
+   - URL: `/local/pulson-alarm-card-v2.js`
    - Type: `JavaScript Module`
+3. Hard refresh the browser (`Ctrl+F5`).
 
-## Card Configuration
+## Card configuration
 
-Single seed entity (auto-discover sibling partitions `p1...p8`):
+### Recommended (gateway auto-discovery)
 
 ```yaml
 type: custom:pulson-alarm-card
-entity: alarm_control_panel.pulson_central_pulson_alarm_p1
-name: Alarm
+name: Pulson Alarm
+gateway_slug: pulson_security_integration_gateway
 ```
 
-Manual list of entities (only configured and available ones are shown):
+### With explicit seed entity
 
 ```yaml
 type: custom:pulson-alarm-card
-name: Alarm
+name: Pulson Alarm
+gateway_slug: pulson_security_integration_gateway
+entity: alarm_control_panel.pulson_security_integration_gateway_partition_1
+```
+
+### With explicit entity list
+
+```yaml
+type: custom:pulson-alarm-card
+name: Pulson Alarm
 entities:
-  - alarm_control_panel.pulson_central_pulson_alarm_p1
-  - alarm_control_panel.pulson_central_pulson_alarm_p2
-  - alarm_control_panel.pulson_central_pulson_alarm_p3
+  - alarm_control_panel.pulson_security_integration_gateway_partition_1
+  - alarm_control_panel.pulson_security_integration_gateway_partition_2
+  - alarm_control_panel.pulson_security_integration_gateway_partition_3
 ```
 
 ## Notes
 
-- Provide either `entity` or `entities`.
-- Only domain `alarm_control_panel` is supported.
-- The PIN input is cleared automatically after every action call.
-
-## Pulson Guard Card (v1)
-
-Modern, dark, mobile-inspired card with:
-- hero status
-- panel/bridge health
-- active faults summary
-- partition multi-select
-- action dock + PIN confirmation sheet
-
-Add resource:
-
-- `/hacsfiles/lovelace-pulson-alarm-demo/pulson-guard-card.js`
-  (or `/local/pulson-guard-card.js` for manual install)
-
-Example config:
-
-```yaml
-type: custom:pulson-guard-card
-name: Pulson Guard
-gateway_slug: pulson_security_integration_gateway
-entity: alarm_control_panel.pulson_security_integration_gateway_partition_1
-```
+- The card supports modern partition naming (`_partition_<n>`) and legacy variants.
+- If partitions are not found, verify `gateway_slug` and entity IDs in Home Assistant.
+- After each update of card JS, use hard refresh to bypass browser cache.
