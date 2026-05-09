@@ -192,7 +192,7 @@ class PulsonAlarmCard extends LitElement {
     if (stateClass === "away") return { icon: "mdi:home-lock", title: "Tryb wyjścia", desc: "System uzbrojony w pełnym trybie ochrony" };
     if (stateClass === "night") return { icon: "mdi:weather-night", title: "Tryb nocny", desc: "System uzbrojony w trybie nocnym" };
     if (stateClass === "disarm") return { icon: "mdi:lock-open-variant-outline", title: "System wyłączony", desc: "Alarm rozbrojony" };
-    return { icon: "mdi:shield-half-full", title: "System częściowy", desc: "Partycje są w różnych stanach" };
+    return { icon: "mdi:shield-half-full", title: "System uzbrojony częściowo", desc: "Partycje są w różnych stanach" };
   }
 
   _setAllPartitionsAction(action) {
