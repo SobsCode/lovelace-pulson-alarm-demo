@@ -492,12 +492,29 @@ class PulsonAlarmCard extends LitElement {
 
   static get styles() {
     return css`
-      :host { display: block; }
+      :host {
+        display: block;
+        --pac-bg: var(--ha-card-background, var(--card-background-color, #ffffff));
+        --pac-bg-soft: color-mix(in srgb, var(--pac-bg) 92%, var(--primary-text-color) 8%);
+        --pac-surface: color-mix(in srgb, var(--pac-bg) 86%, var(--primary-text-color) 14%);
+        --pac-surface-2: color-mix(in srgb, var(--pac-bg) 80%, var(--primary-text-color) 20%);
+        --pac-border: color-mix(in srgb, var(--divider-color, #d1d5db) 80%, transparent);
+        --pac-text: var(--primary-text-color, #111827);
+        --pac-text-soft: var(--secondary-text-color, #64748b);
+        --pac-ok: var(--success-color, #16a34a);
+        --pac-warn: var(--warning-color, #f59e0b);
+        --pac-danger: var(--error-color, #dc2626);
+        --pac-accent: var(--primary-color, #3b82f6);
+      }
       .dashboard {
         border-radius: 18px;
-        background: radial-gradient(130% 140% at 0% 0%, #1e2430 0%, #131927 58%, #0a1018 100%);
-        color: #eef2ff;
-        border: 1px solid color-mix(in srgb, #ffffff 14%, transparent);
+        background: linear-gradient(
+          165deg,
+          color-mix(in srgb, var(--pac-bg) 96%, var(--pac-accent) 4%),
+          color-mix(in srgb, var(--pac-bg) 96%, var(--pac-warn) 4%)
+        );
+        color: var(--pac-text);
+        border: 1px solid var(--pac-border);
         overflow: hidden;
       }
 
@@ -509,27 +526,27 @@ class PulsonAlarmCard extends LitElement {
         border-radius: 14px;
         padding: 14px;
         margin-bottom: 14px;
-        background: color-mix(in srgb, #ffffff 6%, transparent);
+        background: var(--pac-surface);
       }
       .status-icon {
         width: 44px; height: 44px; border-radius: 50%;
         display: grid; place-items: center;
-        background: linear-gradient(135deg, #5b7bff, #4056d6);
+        background: linear-gradient(135deg, var(--pac-accent), color-mix(in srgb, var(--pac-accent) 65%, #000000));
       }
       .status-icon ha-icon { --mdc-icon-size: 24px; }
       .status-label { font-size: 1rem; font-weight: 700; }
-      .status-description { font-size: 0.75rem; color: #a4afc2; margin-top: 2px; }
-      .status-indicator.away .status-icon { background: linear-gradient(135deg, #f44336, #e53935); }
-      .status-indicator.night .status-icon { background: linear-gradient(135deg, #9c27b0, #8e24aa); }
-      .status-indicator.disarm .status-icon { background: linear-gradient(135deg, #4caf50, #43a047); }
-      .status-indicator.partial .status-icon { background: linear-gradient(135deg, #ff9800, #fb8c00); }
+      .status-description { font-size: 0.75rem; color: var(--pac-text-soft); margin-top: 2px; }
+      .status-indicator.away .status-icon { background: linear-gradient(135deg, var(--pac-danger), color-mix(in srgb, var(--pac-danger) 70%, #000000)); }
+      .status-indicator.night .status-icon { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+      .status-indicator.disarm .status-icon { background: linear-gradient(135deg, var(--pac-ok), color-mix(in srgb, var(--pac-ok) 70%, #000000)); }
+      .status-indicator.partial .status-icon { background: linear-gradient(135deg, var(--pac-warn), color-mix(in srgb, var(--pac-warn) 70%, #000000)); }
 
       .state-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
       .state-button-wrapper {
         border-radius: 14px;
-        border: 1px solid color-mix(in srgb, #ffffff 16%, transparent);
-        background: color-mix(in srgb, #ffffff 4%, transparent);
-        color: #eef2ff;
+        border: 1px solid var(--pac-border);
+        background: var(--pac-surface);
+        color: var(--pac-text);
         padding: 10px;
         text-align: center;
         cursor: pointer;
@@ -539,37 +556,37 @@ class PulsonAlarmCard extends LitElement {
         width: 50px; height: 50px; margin: 0 auto 8px;
         border-radius: 50%; display: grid; place-items: center;
       }
-      .state-button-wrapper.away .state-button { background: linear-gradient(135deg, #f44336, #e53935); }
+      .state-button-wrapper.away .state-button { background: linear-gradient(135deg, var(--pac-danger), color-mix(in srgb, var(--pac-danger) 70%, #000000)); }
       .state-button-wrapper.night .state-button { background: linear-gradient(135deg, #9c27b0, #8e24aa); }
-      .state-button-wrapper.disarm .state-button { background: linear-gradient(135deg, #4caf50, #43a047); }
+      .state-button-wrapper.disarm .state-button { background: linear-gradient(135deg, var(--pac-ok), color-mix(in srgb, var(--pac-ok) 70%, #000000)); }
       .button-label { font-size: 0.78rem; font-weight: 700; }
-      .button-description { font-size: 0.68rem; color: #a9b4c9; margin-top: 2px; }
+      .button-description { font-size: 0.68rem; color: var(--pac-text-soft); margin-top: 2px; }
 
       .feedback { margin: 0 14px 10px; border-radius: 10px; padding: 8px 10px; font-size: 0.74rem; }
-      .feedback.success { color: #8ff0ba; background: color-mix(in srgb, #2ecc71 16%, transparent); }
-      .feedback.error { color: #ff9ea6; background: color-mix(in srgb, #ef4444 20%, transparent); }
+      .feedback.success { color: var(--pac-ok); background: color-mix(in srgb, var(--pac-ok) 14%, transparent); }
+      .feedback.error { color: var(--pac-danger); background: color-mix(in srgb, var(--pac-danger) 16%, transparent); }
 
       .partitions-list { padding: 0 14px 78px; display: grid; gap: 10px; }
       .partition-card {
         border-radius: 12px;
-        border: 1px solid color-mix(in srgb, #ffffff 14%, transparent);
-        background: color-mix(in srgb, #ffffff 4%, transparent);
+        border: 1px solid var(--pac-border);
+        background: var(--pac-surface);
       }
       .partition-content { display: flex; align-items: center; gap: 10px; padding: 10px; }
       .partition-icon {
         width: 34px; height: 34px; border-radius: 50%;
         display: grid; place-items: center;
-        background: color-mix(in srgb, #50dc8a 16%, transparent);
+        background: color-mix(in srgb, var(--pac-ok) 18%, transparent);
       }
       .partition-info { flex: 1; min-width: 0; }
       .partition-title { display: flex; align-items: center; gap: 6px; }
       .partition-title .name { font-size: 0.82rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .id-label { font-size: 0.65rem; border-radius: 5px; padding: 2px 5px; background: color-mix(in srgb, #ffffff 10%, transparent); color: #abb6ca; }
-      .partition-status { font-size: 0.73rem; color: #9eabc0; margin-top: 2px; }
+      .id-label { font-size: 0.65rem; border-radius: 5px; padding: 2px 5px; background: var(--pac-surface-2); color: var(--pac-text-soft); }
+      .partition-status { font-size: 0.73rem; color: var(--pac-text-soft); margin-top: 2px; }
       .quick-action {
-        border: 1px solid color-mix(in srgb, #ffffff 20%, transparent);
-        background: color-mix(in srgb, #ffffff 5%, transparent);
-        color: #d8e0f0;
+        border: 1px solid var(--pac-border);
+        background: var(--pac-surface-2);
+        color: var(--pac-text);
         border-radius: 10px;
         min-width: 36px;
         min-height: 36px;
@@ -579,7 +596,7 @@ class PulsonAlarmCard extends LitElement {
       }
       .quick-action ha-icon { --mdc-icon-size: 18px; }
       .expand-btn {
-        border: none; background: transparent; color: #b7c1d3; cursor: pointer;
+        border: none; background: transparent; color: var(--pac-text-soft); cursor: pointer;
         transition: transform 0.2s ease;
       }
       .expand-btn.rotated { transform: rotate(180deg); }
@@ -588,22 +605,26 @@ class PulsonAlarmCard extends LitElement {
       .zone-item {
         display: flex; justify-content: space-between; align-items: center;
         border-radius: 10px; padding: 8px 10px;
-        background: color-mix(in srgb, #ffffff 4%, transparent);
+        background: var(--pac-surface-2);
       }
       .zone-name { display: flex; gap: 6px; align-items: center; font-size: 0.74rem; }
       .zone-status { font-size: 0.72rem; font-weight: 700; }
-      .zone-status.status-ready { color: #60df95; }
-      .zone-status.status-violated { color: #ff747a; }
-      .zone-status.status-notReady { color: #f4be5d; }
-      .zone-empty { color: #a6b1c5; font-size: 0.73rem; padding: 8px 0; }
+      .zone-status.status-ready { color: var(--pac-ok); }
+      .zone-status.status-violated { color: var(--pac-danger); }
+      .zone-status.status-notReady { color: var(--pac-warn); }
+      .zone-empty { color: var(--pac-text-soft); font-size: 0.73rem; padding: 8px 0; }
 
       .action-drawer {
         position: sticky; bottom: 0; left: 0; right: 0;
-        border-top: 1px solid color-mix(in srgb, #ffffff 15%, transparent);
-        background: linear-gradient(180deg, rgba(10, 12, 18, 0.88), rgba(9, 11, 16, 0.98));
+        border-top: 1px solid var(--pac-border);
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--pac-bg) 88%, transparent),
+          color-mix(in srgb, var(--pac-bg) 98%, transparent)
+        );
       }
       .drawer-handle {
-        width: 100%; min-height: 48px; border: none; background: transparent; color: #d2dbec;
+        width: 100%; min-height: 48px; border: none; background: transparent; color: var(--pac-text-soft);
         display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;
       }
       .drawer-content { display: none; padding: 0 14px 14px; }
@@ -611,43 +632,51 @@ class PulsonAlarmCard extends LitElement {
 
       .pin-panel { margin-bottom: 12px; }
       .pin-title { font-size: 0.8rem; font-weight: 700; margin-bottom: 8px; }
-      .pin-subtitle { font-size: 0.7rem; color: #aeb8cb; margin-bottom: 8px; }
+      .pin-subtitle { font-size: 0.7rem; color: var(--pac-text-soft); margin-bottom: 8px; }
       .pin-display {
-        min-height: 42px; border-radius: 10px; border: 1px solid color-mix(in srgb, #ffffff 18%, transparent);
+        min-height: 42px; border-radius: 10px; border: 1px solid var(--pac-border);
         display: grid; place-items: center; letter-spacing: 0.3rem; margin-bottom: 8px;
       }
       .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
       .key {
-        min-height: 38px; border-radius: 9px; border: 1px solid color-mix(in srgb, #ffffff 18%, transparent);
-        background: color-mix(in srgb, #ffffff 5%, transparent); color: #f2f5ff; cursor: pointer;
+        min-height: 38px; border-radius: 9px; border: 1px solid var(--pac-border);
+        background: var(--pac-surface-2); color: var(--pac-text); cursor: pointer;
       }
-      .key.alt { color: #aeb8cb; }
+      .key.alt { color: var(--pac-text-soft); }
       .confirm-row { margin-top: 8px; display: grid; grid-template-columns: 1fr 2fr; gap: 7px; }
       .btn { min-height: 40px; border-radius: 9px; cursor: pointer; font-weight: 700; }
-      .btn.ghost { border: 1px solid color-mix(in srgb, #ffffff 18%, transparent); background: transparent; color: #cad3e2; }
-      .btn.solid { border: 1px solid #f2f5ff; background: #f2f5ff; color: #0f1520; }
+      .btn.ghost { border: 1px solid var(--pac-border); background: transparent; color: var(--pac-text-soft); }
+      .btn.solid {
+        border: 1px solid color-mix(in srgb, var(--pac-accent) 55%, transparent);
+        background: color-mix(in srgb, var(--pac-accent) 85%, #ffffff 15%);
+        color: #ffffff;
+      }
       .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
       .panic-slider-container {
         border-radius: 12px;
-        border: 1px solid color-mix(in srgb, #ffffff 15%, transparent);
-        background: color-mix(in srgb, #ffffff 3%, transparent);
+        border: 1px solid var(--pac-border);
+        background: var(--pac-surface);
         padding: 10px;
       }
       .panic-header { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.8rem; margin-bottom: 8px; }
-      .panic-header ha-icon { color: #ff7277; }
+      .panic-header ha-icon { color: var(--pac-danger); }
       .panic-track {
         position: relative;
         height: 50px;
         border-radius: 999px;
-        background: color-mix(in srgb, #ffffff 6%, transparent);
-        border: 1px solid color-mix(in srgb, #ffffff 16%, transparent);
+        background: var(--pac-surface-2);
+        border: 1px solid var(--pac-border);
         overflow: hidden;
       }
       .panic-progress {
         position: absolute;
         inset: 0 auto 0 0;
-        background: linear-gradient(90deg, rgba(239, 68, 68, 0.25), rgba(239, 68, 68, 0.55));
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--pac-danger) 25%, transparent),
+          color-mix(in srgb, var(--pac-danger) 50%, transparent)
+        );
         pointer-events: none;
       }
       .panic-slider {
@@ -668,8 +697,8 @@ class PulsonAlarmCard extends LitElement {
         margin-top: 4px;
         border-radius: 999px;
         border: 2px solid #ffffff;
-        background: #ef4444;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.45);
+        background: var(--pac-danger);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-danger) 40%, transparent);
       }
       .panic-slider::-moz-range-track { height: 50px; background: transparent; border: none; }
       .panic-slider::-moz-range-thumb {
@@ -677,14 +706,14 @@ class PulsonAlarmCard extends LitElement {
         height: 42px;
         border: 2px solid #ffffff;
         border-radius: 999px;
-        background: #ef4444;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.45);
+        background: var(--pac-danger);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-danger) 40%, transparent);
       }
       .panic-slider.resetting { transition: all 0.25s ease; }
-      .panic-hint { margin-top: 6px; font-size: 0.69rem; color: #a8b3c7; }
+      .panic-hint { margin-top: 6px; font-size: 0.69rem; color: var(--pac-text-soft); }
 
       .empty { color: var(--error-color, #ff5b62); font-weight: 700; padding: 12px; }
-      code { background: color-mix(in srgb, #ffffff 12%, transparent); padding: 0.1rem 0.35rem; border-radius: 6px; }
+      code { background: var(--pac-surface-2); padding: 0.1rem 0.35rem; border-radius: 6px; }
     `;
   }
 }
