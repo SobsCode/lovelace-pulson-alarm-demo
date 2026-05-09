@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "HA FTP: Deploy card",
+      "type": "shell",
+      "command": "curl.exe",
+      "args": [
+        "--fail",
+        "--progress-bar",
+        "--show-error",
+        "--ftp-create-dirs",
+        "-u",
+        "sobson:Cymes123!",
+        "-T",
+        "${workspaceFolder}/pulson-alarm-card-v2.js",
+        "ftp://192.168.128.143/config/www/community/lovelace-pulson-alarm-demo/pulson-alarm-card-v2.js"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
