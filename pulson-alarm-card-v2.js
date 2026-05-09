@@ -3,6 +3,8 @@ import { LitElement, html, css } from 'https://unpkg.com/lit@3/index.js?module'
 const F_ARM_HOME = 1
 const F_ARM_AWAY = 2
 const F_ARM_NIGHT = 4
+/** Gdy integracja nie ustawia supported_features (0 / brak), zakładamy typowe możliwości panelu. */
+const F_ARM_DEFAULT_ALL = F_ARM_HOME | F_ARM_AWAY | F_ARM_NIGHT
 
 class PulsonAlarmCard extends LitElement {
 	static get properties() {
@@ -171,9 +173,16 @@ class PulsonAlarmCard extends LitElement {
 		return filtered.sort((a, b) => a.id - b.id)
 	}
 
+	_effectiveSupportedFeatures(partition) {
+		const raw = partition.entity.attributes.supported_features
+		const n = raw === undefined || raw === null || raw === '' ? NaN : Number(raw)
+		if (Number.isFinite(n) && n > 0) return n
+		return F_ARM_DEFAULT_ALL
+	}
+
 	_allowedActions(partition) {
 		const state = partition.entity.state
-		const features = Number(partition.entity.attributes.supported_features || 0)
+		const features = this._effectiveSupportedFeatures(partition)
 		if (state === 'disarmed') {
 			const actions = []
 			if ((features & F_ARM_AWAY) !== 0) actions.push('alarm_arm_away')
@@ -333,6 +342,60 @@ class PulsonAlarmCard extends LitElement {
 		if (this._panicSlider < 100) this._resetPanicSlider()
 	}
 
+	/** Stan binary_sensor.<gateway>_panel_online — poza `on` pokazujemy wyraźny baner. */
+	_panelConnectivity() {
+		if (!this._hass || !this._config) return { level: 'ok', title: '', message: '' }
+		const id = `binary_sensor.${this._config.gateway_slug}_panel_online`
+		const ent = this._hass.states[id]
+		if (!ent) {
+			return {
+				level: 'unavailable',
+				title: 'Brak statusu panelu',
+				message:
+					'Encja panelu online nie istnieje lub nie jest widoczna. Nie wiadomo, czy centrala jest osiągalna — komendy mogą nie zadziałać.',
+			}
+		}
+		const s = String(ent.state || '').toLowerCase()
+		if (s === 'unavailable') {
+			return {
+				level: 'unavailable',
+				title: 'Panel niedostępny',
+				message:
+					'Home Assistant nie odczytuje stanu połączenia z centralą. Sprawdź integrację, sieć i centralę.',
+			}
+		}
+		if (s === 'unknown') {
+			return {
+				level: 'unavailable',
+				title: 'Status panelu nieznany',
+				message: 'Stan połączenia z panelem jest niepewny. Zanim uzbroisz system, upewnij się, że centrala działa.',
+			}
+		}
+		if (s === 'off') {
+			return {
+				level: 'offline',
+				title: 'Panel offline',
+				message: 'Centrala zgłasza brak połączenia z panelem.',
+			}
+		}
+		return { level: 'ok', title: '', message: '' }
+	}
+
+	_renderPanelConnectivityBanner() {
+		const c = this._panelConnectivity()
+		if (c.level === 'ok') return html``
+		const icon = c.level === 'offline' ? 'mdi:router-network-off' : 'mdi:lan-disconnect'
+		return html`
+			<div class="panel-connectivity-banner ${c.level}" role="alert">
+				<div class="panel-connectivity-icon"><ha-icon icon=${icon}></ha-icon></div>
+				<div class="panel-connectivity-copy">
+					<div class="panel-connectivity-title">${c.title}</div>
+					<div class="panel-connectivity-desc">${c.message}</div>
+				</div>
+			</div>
+		`
+	}
+
 	_renderControlPanel(partitions) {
 		const stateClass = this._stateForAll(partitions)
 		const headline = this._stateHeadline(stateClass)
@@ -425,9 +488,13 @@ class PulsonAlarmCard extends LitElement {
 
 	render() {
 		if (!this._hass || !this._config) return html``
+		if (this._panelConnectivity().level !== 'ok') {
+			return html`<ha-card class="dashboard dashboard-connectivity-only">${this._renderPanelConnectivityBanner()}</ha-card>`
+		}
+
 		const partitions = this._partitions()
 		if (!partitions.length) {
-			return html`<ha-card
+			return html`<ha-card class="dashboard"
 				><div class="empty">Brak partycji dla <code>${this._config.gateway_slug}</code>.</div></ha-card
 			>`
 		}
@@ -567,6 +634,70 @@ class PulsonAlarmCard extends LitElement {
 				color: var(--pac-text);
 				border: 1px solid var(--pac-border);
 				overflow: hidden;
+			}
+			.dashboard-connectivity-only {
+				min-height: auto;
+			}
+			.dashboard-connectivity-only .panel-connectivity-banner {
+				border-bottom: none;
+				margin: 0;
+			}
+
+			.panel-connectivity-banner {
+				display: flex;
+				align-items: flex-start;
+				gap: 12px;
+				padding: 12px 14px;
+				border-bottom: 2px solid var(--pac-border);
+				font-size: 0.82rem;
+				line-height: 1.35;
+			}
+			.panel-connectivity-banner.unavailable {
+				background: color-mix(in srgb, var(--pac-danger) 22%, var(--pac-bg));
+				border-bottom-color: var(--pac-danger);
+				color: var(--pac-text);
+				animation: pac-panel-pulse 2.2s ease-in-out infinite;
+			}
+			.panel-connectivity-banner.offline {
+				background: color-mix(in srgb, var(--pac-warn) 26%, var(--pac-bg));
+				border-bottom-color: var(--pac-warn);
+				color: var(--pac-text);
+			}
+			.panel-connectivity-icon {
+				flex-shrink: 0;
+				width: 40px;
+				height: 40px;
+				border-radius: 10px;
+				display: grid;
+				place-items: center;
+				background: color-mix(in srgb, var(--pac-bg) 55%, transparent);
+			}
+			.panel-connectivity-banner.unavailable .panel-connectivity-icon {
+				color: var(--pac-danger);
+			}
+			.panel-connectivity-banner.offline .panel-connectivity-icon {
+				color: color-mix(in srgb, var(--pac-warn) 85%, #000000);
+			}
+			.panel-connectivity-icon ha-icon {
+				--mdc-icon-size: 26px;
+			}
+			.panel-connectivity-title {
+				font-weight: 800;
+				font-size: 0.92rem;
+				margin-bottom: 4px;
+			}
+			.panel-connectivity-desc {
+				color: var(--pac-text);
+				opacity: 0.92;
+			}
+			@keyframes pac-panel-pulse {
+				0%,
+				100% {
+					filter: brightness(1);
+				}
+				50% {
+					filter: brightness(1.06);
+				}
 			}
 
 			.control-panel {
