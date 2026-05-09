@@ -2,25 +2,20 @@
 
 `pulson-alarm-card` is a modern Lovelace card for Home Assistant designed for the Pulson integration (`pulson_security_integration_gateway`).
 
-The interface is rebuilt from scratch with a mobile-first, premium dark design inspired by streaming apps, while keeping alarm-system safety and clarity as the top priority.
+The current version ports core layout and behavior from an Angular mobile `partition-dashboard`: global state panel, quick mode buttons, expandable partition cards with zones, and bottom action drawer.
 
 ## What this card provides
 
-- Hero security state (safe / armed / alarm)
-- Gateway health status (panel online, bridge online, service mode)
-- Active fault summary (from Pulson trouble sensors)
-- Multi-partition selection (up to 8 partitions)
-- Dynamic actions based on partition state and features:
-  - Arm Away
-  - Arm Home
-  - Arm Night
-  - Disarm
-- Secure two-step flow:
-  1. choose action
-  2. enter PIN and confirm
-- Action feedback with:
-  - `last_partition_command_status`
-  - `last_partition_code_valid`
+- System state header with mode summary (`away`, `night`, `disarm`, `partial`)
+- Global quick actions:
+  - `Tryb wyjścia` (arm away)
+  - `Tryb nocny` (arm night)
+  - `Wyłącz` (disarm)
+- Partition list with expandable zone view (`sensor.<slug>_zone_<n>`)
+- Bottom drawer for:
+  - action confirmation and PIN entry
+  - optional panic slider action (configurable service call)
+- Uses `supported_features` to show only valid actions
 
 ## Installation (HACS)
 
@@ -48,6 +43,8 @@ The interface is rebuilt from scratch with a mobile-first, premium dark design i
 type: custom:pulson-alarm-card
 name: Pulson Alarm
 gateway_slug: pulson_security_integration_gateway
+panic_service: script.pulson_panic
+panic_service_data: {}
 ```
 
 ### With explicit seed entity
@@ -75,3 +72,4 @@ entities:
 - The card supports modern partition naming (`_partition_<n>`) and legacy variants.
 - If partitions are not found, verify `gateway_slug` and entity IDs in Home Assistant.
 - After each update of card JS, use hard refresh to bypass browser cache.
+- `panic_service` is optional. Format: `<domain>.<service>`, e.g. `script.pulson_panic`.
