@@ -86,6 +86,27 @@ class PulsonAlarmCard extends LitElement {
 		return map[state] || state
 	}
 
+	/**
+	 * Ikona + ton kolorystyczny kółka statusu partycji (spójnie z panelem głównym).
+	 * @returns {{ tone: string, icon: string }}
+	 */
+	_partitionStatusVisual(state) {
+		const s = String(state ?? '')
+			.toLowerCase()
+			.trim()
+		if (s === 'disarmed') return { tone: 'disarmed', icon: 'mdi:shield-off-outline' }
+		if (s === 'armed_away') return { tone: 'away', icon: 'mdi:shield-lock' }
+		if (s === 'armed_home') return { tone: 'home', icon: 'mdi:shield-home' }
+		if (s === 'armed_night') return { tone: 'night', icon: 'mdi:weather-night' }
+		if (s.startsWith('armed')) return { tone: 'partial', icon: 'mdi:shield-half-full' }
+		if (s === 'arming') return { tone: 'transition', icon: 'mdi:shield-sync' }
+		if (s === 'disarming') return { tone: 'transition', icon: 'mdi:shield-half-full' }
+		if (s === 'pending') return { tone: 'transition', icon: 'mdi:clock-outline' }
+		if (s === 'triggered') return { tone: 'alarm', icon: 'mdi:bell-ring' }
+		if (s === 'unavailable' || s === 'unknown') return { tone: 'muted', icon: 'mdi:shield-alert-outline' }
+		return { tone: 'muted', icon: 'mdi:shield-outline' }
+	}
+
 	_normalizeEntityId(id) {
 		return id.replace(/_pulson_partition_(\d+)$/, '_partition_$1')
 	}
@@ -328,7 +349,7 @@ class PulsonAlarmCard extends LitElement {
 		const fault = this._systemFaultStatus()
 		let base
 		if (stateClass === 'away')
-			base = { icon: 'mdi:home-lock', title: 'Tryb wyjścia', desc: 'System uzbrojony w pełnym trybie ochrony' }
+			base = { icon: 'mdi:home-lock', title: 'Tryb wyjścia', desc: 'Wszystkie partycje uzbrojone w trybie wyjścia' }
 		else if (stateClass === 'night')
 			base = { icon: 'mdi:weather-night', title: 'Tryb nocny', desc: 'System uzbrojony w trybie nocnym' }
 		else if (stateClass === 'disarm')
@@ -881,10 +902,13 @@ class PulsonAlarmCard extends LitElement {
 								? `${this._actionUi(primary).label} — partycja nie jest gotowa do uzbrojenia`
 								: this._actionUi(primary).label
 							: ''
+						const pVis = this._partitionStatusVisual(partition.entity.state)
 						return html`
-							<div class="partition-card">
+							<div class="partition-card partition-tone-${pVis.tone}">
 								<div class="partition-content">
-									<div class="partition-icon"><ha-icon icon="mdi:shield-outline"></ha-icon></div>
+									<div class="partition-icon tone-${pVis.tone}" aria-hidden="true">
+										<ha-icon icon=${pVis.icon}></ha-icon>
+									</div>
 									<div class="partition-info">
 										<div class="partition-title">
 											<span class="name">${partition.title}</span>
@@ -938,7 +962,7 @@ class PulsonAlarmCard extends LitElement {
 																</div>
 															`,
 														)
-													: html`<div class="zone-empty">Brak stref do wyświetlenia.</div>`}
+													: html`<div class="zone-empty">Brak linii do wyświetlenia - wszystkie linie są gotowe do uzbrojenia.</div>`}
 											</div>
 										`
 									: ''}
@@ -1232,6 +1256,32 @@ class PulsonAlarmCard extends LitElement {
 				border-radius: 12px;
 				border: 1px solid var(--pac-border);
 				background: var(--pac-surface);
+				border-left-width: 3px;
+				border-left-color: var(--pac-border);
+			}
+			.partition-tone-disarmed {
+				border-left-color: color-mix(in srgb, var(--pac-ok) 55%, var(--pac-border));
+			}
+			.partition-tone-away {
+				border-left-color: color-mix(in srgb, var(--pac-danger) 62%, var(--pac-border));
+			}
+			.partition-tone-home {
+				border-left-color: color-mix(in srgb, var(--pac-accent) 58%, var(--pac-border));
+			}
+			.partition-tone-night {
+				border-left-color: color-mix(in srgb, #8b5cf6 55%, var(--pac-border));
+			}
+			.partition-tone-partial {
+				border-left-color: color-mix(in srgb, var(--pac-warn) 52%, var(--pac-border));
+			}
+			.partition-tone-transition {
+				border-left-color: color-mix(in srgb, var(--pac-warn) 48%, var(--pac-border));
+			}
+			.partition-tone-alarm {
+				border-left-color: var(--pac-danger);
+			}
+			.partition-tone-muted {
+				border-left-color: color-mix(in srgb, var(--pac-text-soft) 45%, var(--pac-border));
 			}
 			.partition-content {
 				display: flex;
@@ -1240,12 +1290,67 @@ class PulsonAlarmCard extends LitElement {
 				padding: 10px;
 			}
 			.partition-icon {
-				width: 34px;
-				height: 34px;
+				width: 38px;
+				height: 38px;
 				border-radius: 50%;
+				flex-shrink: 0;
 				display: grid;
 				place-items: center;
-				background: color-mix(in srgb, var(--pac-ok) 18%, transparent);
+				border: 1px solid var(--pac-border);
+				box-sizing: border-box;
+			}
+			.partition-icon ha-icon {
+				--mdc-icon-size: 22px;
+			}
+			.partition-icon.tone-disarmed {
+				background: color-mix(in srgb, var(--pac-ok) 16%, var(--pac-bg));
+				color: color-mix(in srgb, var(--pac-ok) 88%, var(--pac-text));
+				border-color: color-mix(in srgb, var(--pac-ok) 28%, var(--pac-border));
+			}
+			.partition-icon.tone-away {
+				background: color-mix(in srgb, var(--pac-danger) 18%, var(--pac-bg));
+				color: var(--pac-danger);
+				border-color: color-mix(in srgb, var(--pac-danger) 32%, var(--pac-border));
+			}
+			.partition-icon.tone-home {
+				background: color-mix(in srgb, var(--pac-accent) 16%, var(--pac-bg));
+				color: var(--pac-accent);
+				border-color: color-mix(in srgb, var(--pac-accent) 30%, var(--pac-border));
+			}
+			.partition-icon.tone-night {
+				background: color-mix(in srgb, #8b5cf6 17%, var(--pac-bg));
+				color: #7c3aed;
+				border-color: color-mix(in srgb, #8b5cf6 32%, var(--pac-border));
+			}
+			.partition-icon.tone-partial {
+				background: color-mix(in srgb, var(--pac-warn) 16%, var(--pac-bg));
+				color: color-mix(in srgb, var(--pac-warn) 82%, var(--pac-text));
+				border-color: color-mix(in srgb, var(--pac-warn) 30%, var(--pac-border));
+			}
+			.partition-icon.tone-transition {
+				background: color-mix(in srgb, var(--pac-warn) 14%, var(--pac-bg));
+				color: color-mix(in srgb, var(--pac-warn) 78%, var(--pac-text));
+				border-color: color-mix(in srgb, var(--pac-warn) 26%, var(--pac-border));
+			}
+			.partition-icon.tone-alarm {
+				background: color-mix(in srgb, var(--pac-danger) 22%, var(--pac-bg));
+				color: var(--pac-danger);
+				border-color: color-mix(in srgb, var(--pac-danger) 42%, var(--pac-border));
+				animation: pac-partition-alarm-pulse 2.1s ease-in-out infinite;
+			}
+			.partition-icon.tone-muted {
+				background: color-mix(in srgb, var(--pac-surface-2) 88%, var(--pac-bg));
+				color: var(--pac-text-soft);
+				border-color: color-mix(in srgb, var(--pac-text-soft) 22%, var(--pac-border));
+			}
+			@keyframes pac-partition-alarm-pulse {
+				0%,
+				100% {
+					box-shadow: 0 0 0 0 color-mix(in srgb, var(--pac-danger) 28%, transparent);
+				}
+				50% {
+					box-shadow: 0 0 0 5px color-mix(in srgb, var(--pac-danger) 8%, transparent);
+				}
 			}
 			.partition-info {
 				flex: 1;
