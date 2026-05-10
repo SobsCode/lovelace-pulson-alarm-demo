@@ -300,7 +300,16 @@ class PulsonAlarmCard extends LitElement {
 			if ((features & F_ARM_NIGHT) !== 0) actions.push('alarm_arm_night')
 			return actions
 		}
-		if (state.startsWith('armed') || state === 'triggered') return ['alarm_disarm']
+		// W trakcie uzbrajania / rozbrajania użytkownik musi móc przerwać (rozbroić).
+		if (
+			state.startsWith('armed') ||
+			state === 'triggered' ||
+			state === 'arming' ||
+			state === 'disarming' ||
+			state === 'pending'
+		) {
+			return ['alarm_disarm']
+		}
 		return []
 	}
 
