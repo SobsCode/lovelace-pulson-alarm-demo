@@ -617,7 +617,7 @@ class PulsonAlarmCard extends LitElement {
 		if (spec.disabled) return 'Ta akcja jest niedostępna.'
 		const v = this._specialSliders[spec.kind]
 		if (v >= 100) return 'Przytrzymaj chwilę na końcu, aby potwierdzić.'
-		return 'Przeciągnij suwak do końca i przytrzymaj, aby wysłać komendę do centrali.'
+		return 'Przeciągnij suwak do końca i przytrzymaj, aby wysłać wygenerować alarm napadowy.'
 	}
 
 	_renderSpecialAlarmDrawer() {
