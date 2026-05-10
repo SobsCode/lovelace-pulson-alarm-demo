@@ -598,14 +598,12 @@ class PulsonAlarmCard extends LitElement {
 											<span class="name">${partition.title}</span>
 											${partition.index ? html`<span class="id-label">Partycja #${partition.index}</span>` : ''}
 										</div>
-										<div class="partition-meta">
-											<div class="partition-status">${this._stateLabel(partition.entity.state)}</div>
+										<div class="partition-meta" role="status">
+											<span class="partition-status">${this._stateLabel(partition.entity.state)}</span>
 											${readiness
 												? html`
-														<div class="partition-readiness ${readiness.variant}" role="status">
-															<span class="partition-readiness-dot" aria-hidden="true"></span>
-															<span class="partition-readiness-label">${readiness.label}</span>
-														</div>
+														<span class="partition-meta-sep" aria-hidden="true">|</span>
+														<span class="partition-readiness-inline ${readiness.variant}">${readiness.label}</span>
 													`
 												: ''}
 										</div>
@@ -945,50 +943,34 @@ class PulsonAlarmCard extends LitElement {
 			.partition-meta {
 				margin-top: 2px;
 				display: flex;
-				flex-direction: column;
-				gap: 3px;
+				align-items: baseline;
+				flex-wrap: wrap;
+				gap: 0 6px;
+				font-size: 0.73rem;
+				line-height: 1.35;
+				color: var(--pac-text-soft);
 			}
 			.partition-status {
-				font-size: 0.73rem;
+				color: inherit;
+				font-weight: 500;
+			}
+			.partition-meta-sep {
 				color: var(--pac-text-soft);
-				line-height: 1.3;
+				opacity: 0.4;
+				font-weight: 400;
+				user-select: none;
 			}
-			/* Gotowość: ta sama skala co strefy — kropka + tekst, bez osobnego „chipa” */
-			.partition-readiness {
-				display: flex;
-				align-items: center;
-				gap: 6px;
-				font-size: 0.72rem;
-				line-height: 1.3;
-				color: var(--pac-text-soft);
-			}
-			.partition-readiness-dot {
-				width: 6px;
-				height: 6px;
-				border-radius: 50%;
-				flex-shrink: 0;
-				background: var(--pac-text-soft);
-				opacity: 0.55;
-			}
-			.partition-readiness-label {
+			.partition-readiness-inline {
 				min-width: 0;
 				font-weight: 500;
 			}
-			.partition-readiness.ready .partition-readiness-dot {
-				background: var(--pac-ok);
-				opacity: 1;
+			.partition-readiness-inline.ready {
+				color: color-mix(in srgb, var(--pac-ok) 88%, var(--pac-text-soft));
 			}
-			.partition-readiness.ready .partition-readiness-label {
-				color: color-mix(in srgb, var(--pac-ok) 82%, var(--pac-text-soft));
+			.partition-readiness-inline.not_ready {
+				color: color-mix(in srgb, var(--pac-warn) 85%, var(--pac-text-soft));
 			}
-			.partition-readiness.not_ready .partition-readiness-dot {
-				background: var(--pac-warn);
-				opacity: 1;
-			}
-			.partition-readiness.not_ready .partition-readiness-label {
-				color: color-mix(in srgb, var(--pac-warn) 78%, var(--pac-text-soft));
-			}
-			.partition-readiness.unknown .partition-readiness-label {
+			.partition-readiness-inline.unknown {
 				color: var(--pac-text-soft);
 				font-weight: 400;
 			}
