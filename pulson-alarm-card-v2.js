@@ -70,7 +70,39 @@ class PulsonAlarmCard extends LitElement {
 		return 11
 	}
 
+	/**
+	 * Integracje mogą zwracać polski `state` zamiast kanonu HA (`arming`, …).
+	 * Ta sama normalizacja co w logice — nagłówek i lista pozostają spójne.
+	 */
+	_canonicalAlarmPanelState(raw) {
+		const s = String(raw ?? '')
+			.toLowerCase()
+			.trim()
+			.replace(/\s+/g, '_')
+		const fold = s
+			.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/ł/g, 'l')
+		const aliases = {
+			uzbrajanie: 'arming',
+			rozbrajanie: 'disarming',
+			oczekiwanie: 'pending',
+			wylaczony: 'disarmed',
+			wyłączony: 'disarmed',
+			rozbrojony: 'disarmed',
+			tryb_wyjscia: 'armed_away',
+			tryb_wyjścia: 'armed_away',
+			tryb_domowy: 'armed_home',
+			tryb_nocny: 'armed_night',
+			alarm: 'triggered',
+		}
+		if (aliases[s]) return aliases[s]
+		if (aliases[fold]) return aliases[fold]
+		return s
+	}
+
 	_stateLabel(state) {
+		const c = this._canonicalAlarmPanelState(state)
 		const map = {
 			disarmed: 'Wyłączony',
 			armed_away: 'Tryb wyjścia',
@@ -83,7 +115,7 @@ class PulsonAlarmCard extends LitElement {
 			unavailable: 'Niedostępny',
 			unknown: 'Nieznany',
 		}
-		return map[state] || state
+		return map[c] || String(state ?? '')
 	}
 
 	/**
@@ -91,9 +123,7 @@ class PulsonAlarmCard extends LitElement {
 	 * @returns {{ tone: string, icon: string }}
 	 */
 	_partitionStatusVisual(state) {
-		const s = String(state ?? '')
-			.toLowerCase()
-			.trim()
+		const s = this._canonicalAlarmPanelState(state)
 		if (s === 'disarmed') return { tone: 'disarmed', icon: 'mdi:shield-off-outline' }
 		if (s === 'armed_away') return { tone: 'away', icon: 'mdi:shield-lock' }
 		if (s === 'armed_home') return { tone: 'home', icon: 'mdi:shield-home' }
@@ -229,7 +259,7 @@ class PulsonAlarmCard extends LitElement {
 	 * @returns {null | { variant: 'ready' | 'not_ready' | 'unknown', label: string }}
 	 */
 	_partitionReadinessLine(partition) {
-		if (partition.entity.state !== 'disarmed' || !partition.index) return null
+		if (this._canonicalAlarmPanelState(partition.entity.state) !== 'disarmed' || !partition.index) return null
 		const id = this._partitionReadySensorId(partition)
 		const ent = this._hass?.states[id]
 		if (!ent) {
@@ -312,7 +342,7 @@ class PulsonAlarmCard extends LitElement {
 	}
 
 	_allowedActions(partition) {
-		const state = partition.entity.state
+		const state = this._canonicalAlarmPanelState(partition.entity.state)
 		const features = this._effectiveSupportedFeatures(partition)
 		if (state === 'disarmed') {
 			const actions = []
@@ -336,16 +366,24 @@ class PulsonAlarmCard extends LitElement {
 
 	_stateForAll(partitions) {
 		if (!partitions.length) return 'none'
-		const unique = [...new Set(partitions.map((p) => p.entity.state))]
+		const unique = [...new Set(partitions.map((p) => this._canonicalAlarmPanelState(p.entity.state)))]
 		if (unique.length > 1) return 'partial'
 		const only = unique[0]
 		if (only === 'armed_away') return 'away'
 		if (only === 'armed_night') return 'night'
 		if (only === 'disarmed') return 'disarm'
+		if (only === 'arming' || only === 'disarming' || only === 'pending') return 'delay'
 		return 'partial'
 	}
 
-	_stateHeadline(stateClass) {
+	/** Gdy wszystkie partycje mają ten sam surowy `state` (np. to samo co w wierszu listy). */
+	_uniformPartitionRawState(partitions) {
+		if (!partitions.length) return null
+		const raw = [...new Set(partitions.map((p) => p.entity.state))]
+		return raw.length === 1 ? partitions[0].entity.state : null
+	}
+
+	_stateHeadline(stateClass, uniformRawState = null) {
 		const fault = this._systemFaultStatus()
 		let base
 		if (stateClass === 'away')
@@ -354,7 +392,15 @@ class PulsonAlarmCard extends LitElement {
 			base = { icon: 'mdi:weather-night', title: 'Tryb nocny', desc: 'System uzbrojony w trybie nocnym' }
 		else if (stateClass === 'disarm')
 			base = { icon: 'mdi:lock-open-variant-outline', title: 'System wyłączony', desc: 'Wszystkie partycje są rozbrojone' }
-		else
+		else if (stateClass === 'delay') {
+			const raw = uniformRawState ?? 'arming'
+			const vis = this._partitionStatusVisual(raw)
+			base = {
+				icon: vis.icon,
+				title: this._stateLabel(raw),
+				desc: 'Wszystkie partycje są w tym samym stanie.',
+			}
+		} else
 			base = {
 				icon: 'mdi:shield-half-full',
 				title: 'System uzbrojony częściowo',
@@ -766,7 +812,8 @@ class PulsonAlarmCard extends LitElement {
 
 	_renderControlPanel(partitions) {
 		const stateClass = this._stateForAll(partitions)
-		const headline = this._stateHeadline(stateClass)
+		const uniformRaw = stateClass === 'delay' ? this._uniformPartitionRawState(partitions) : null
+		const headline = this._stateHeadline(stateClass, uniformRaw)
 		const canAway = partitions.some((p) => this._allowedActions(p).includes('alarm_arm_away'))
 		const canNight = partitions.some((p) => this._allowedActions(p).includes('alarm_arm_night'))
 		const canDisarm = partitions.some((p) => this._allowedActions(p).includes('alarm_disarm'))
@@ -1118,6 +1165,9 @@ class PulsonAlarmCard extends LitElement {
 			}
 			.status-indicator.partial .status-icon {
 				background: linear-gradient(135deg, var(--pac-warn), color-mix(in srgb, var(--pac-warn) 70%, #000000));
+			}
+			.status-indicator.delay .status-icon {
+				background: linear-gradient(135deg, #0ea5e9, color-mix(in srgb, #0284c7 75%, #0f172a));
 			}
 			.status-indicator.fault-fault {
 				box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pac-danger) 45%, transparent);
