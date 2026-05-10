@@ -353,7 +353,7 @@ class PulsonAlarmCard extends LitElement {
 		else if (stateClass === 'night')
 			base = { icon: 'mdi:weather-night', title: 'Tryb nocny', desc: 'System uzbrojony w trybie nocnym' }
 		else if (stateClass === 'disarm')
-			base = { icon: 'mdi:lock-open-variant-outline', title: 'System wyłączony', desc: 'Alarm rozbrojony' }
+			base = { icon: 'mdi:lock-open-variant-outline', title: 'System wyłączony', desc: 'Wszystkie partycje są rozbrojone' }
 		else
 			base = {
 				icon: 'mdi:shield-half-full',
