@@ -316,13 +316,27 @@ class PulsonAlarmCard extends LitElement {
 	}
 
 	_stateHeadline(stateClass) {
+		const fault = this._systemFaultStatus()
+		let base
 		if (stateClass === 'away')
-			return { icon: 'mdi:home-lock', title: 'Tryb wyjścia', desc: 'System uzbrojony w pełnym trybie ochrony' }
-		if (stateClass === 'night')
-			return { icon: 'mdi:weather-night', title: 'Tryb nocny', desc: 'System uzbrojony w trybie nocnym' }
-		if (stateClass === 'disarm')
-			return { icon: 'mdi:lock-open-variant-outline', title: 'System wyłączony', desc: 'Alarm rozbrojony' }
-		return { icon: 'mdi:shield-half-full', title: 'System uzbrojony częściowo', desc: 'Partycje są w różnych stanach' }
+			base = { icon: 'mdi:home-lock', title: 'Tryb wyjścia', desc: 'System uzbrojony w pełnym trybie ochrony' }
+		else if (stateClass === 'night')
+			base = { icon: 'mdi:weather-night', title: 'Tryb nocny', desc: 'System uzbrojony w trybie nocnym' }
+		else if (stateClass === 'disarm')
+			base = { icon: 'mdi:lock-open-variant-outline', title: 'System wyłączony', desc: 'Alarm rozbrojony' }
+		else
+			base = {
+				icon: 'mdi:shield-half-full',
+				title: 'System uzbrojony częściowo',
+				desc: 'Partycje są w różnych stanach',
+			}
+
+		return {
+			...base,
+			faultLevel: fault.level,
+			faultLabel: fault.label,
+			faultDetail: fault.desc,
+		}
 	}
 
 	_setAllPartitionsAction(action) {
@@ -672,8 +686,8 @@ class PulsonAlarmCard extends LitElement {
 		if (s === 'off') {
 			return {
 				level: 'offline',
-				title: 'Panel offline',
-				message: 'Centrala zgłasza brak połączenia z panelem.',
+				title: 'Centrala offline',
+				message: 'Brak komunikacja z centralą alarmową.',
 			}
 		}
 		return { level: 'ok', title: '', message: '' }
@@ -694,6 +708,32 @@ class PulsonAlarmCard extends LitElement {
 		`
 	}
 
+	_systemFaultStatus() {
+		if (!this._hass || !this._config) {
+			return { level: 'unknown', label: 'Brak danych o usterkach', desc: 'Sensor niedostępny' }
+		}
+		const id = `sensor.${this._config.gateway_slug}_any_fault`
+		const ent = this._hass.states[id]
+		if (!ent) {
+			return { level: 'unknown', label: 'Brak danych o usterkach', desc: 'Sensor nie istnieje w HA' }
+		}
+		const s = String(ent.state ?? '')
+			.toLowerCase()
+			.trim()
+		const okStates = new Set(['off', 'false', '0', 'no', 'none', 'brak', 'ok', 'clear'])
+		const faultStates = new Set(['on', 'true', '1', 'yes', 'fault', 'alarm', 'active', 'usterka', 'awaria'])
+		if (okStates.has(s)) {
+			return { level: 'ok', label: 'Brak usterek', desc: 'System pracuje poprawnie' }
+		}
+		if (faultStates.has(s)) {
+			return { level: 'fault', label: 'Wykryto usterkę', desc: 'Sprawdź szczegóły usterek w systemie' }
+		}
+		if (s === 'unknown' || s === 'unavailable' || s === '') {
+			return { level: 'unknown', label: 'Brak danych o usterkach', desc: 'Sensor raportuje stan nieznany' }
+		}
+		return { level: 'unknown', label: 'Status usterek niejednoznaczny', desc: `Odczyt: ${ent.state}` }
+	}
+
 	_renderControlPanel(partitions) {
 		const stateClass = this._stateForAll(partitions)
 		const headline = this._stateHeadline(stateClass)
@@ -704,11 +744,19 @@ class PulsonAlarmCard extends LitElement {
 
 		return html`
 			<div class="control-panel">
-				<div class="status-indicator ${stateClass}">
+				<div class="status-indicator ${stateClass} fault-${headline.faultLevel}" role="status" aria-live="polite">
 					<div class="status-icon"><ha-icon icon=${headline.icon}></ha-icon></div>
 					<div class="status-info">
 						<div class="status-label">${headline.title}</div>
 						<div class="status-description">${headline.desc}</div>
+						<div class="status-fault-line ${headline.faultLevel}">
+							<span class="status-fault-dot" aria-hidden="true"></span>
+							<span class="status-fault-text">
+								<span class="status-fault-label">${headline.faultLabel}</span>
+								<span class="status-fault-sep" aria-hidden="true">·</span>
+								<span class="status-fault-detail">${headline.faultDetail}</span>
+							</span>
+						</div>
 					</div>
 				</div>
 
@@ -1037,6 +1085,69 @@ class PulsonAlarmCard extends LitElement {
 			}
 			.status-indicator.partial .status-icon {
 				background: linear-gradient(135deg, var(--pac-warn), color-mix(in srgb, var(--pac-warn) 70%, #000000));
+			}
+			.status-indicator.fault-fault {
+				box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pac-danger) 45%, transparent);
+			}
+			.status-indicator.fault-unknown {
+				box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pac-text-soft) 35%, transparent);
+			}
+			.status-fault-line {
+				display: flex;
+				align-items: flex-start;
+				gap: 7px;
+				margin-top: 8px;
+				padding-top: 8px;
+				border-top: 1px solid color-mix(in srgb, var(--pac-border) 75%, transparent);
+				font-size: 0.72rem;
+				line-height: 1.35;
+			}
+			.status-fault-dot {
+				width: 8px;
+				height: 8px;
+				border-radius: 999px;
+				margin-top: 4px;
+				flex-shrink: 0;
+			}
+			.status-fault-text {
+				min-width: 0;
+				display: block;
+			}
+			.status-fault-label {
+				font-weight: 700;
+			}
+			.status-fault-sep {
+				margin: 0 0.28em;
+				opacity: 0.45;
+				font-weight: 400;
+			}
+			.status-fault-detail {
+				font-weight: 500;
+				color: var(--pac-text-soft);
+			}
+			.status-fault-line.ok .status-fault-dot {
+				background: var(--pac-ok);
+				box-shadow: 0 0 0 3px color-mix(in srgb, var(--pac-ok) 18%, transparent);
+			}
+			.status-fault-line.ok .status-fault-label {
+				color: color-mix(in srgb, var(--pac-ok) 82%, var(--pac-text));
+			}
+			.status-fault-line.fault .status-fault-dot {
+				background: var(--pac-danger);
+				box-shadow: 0 0 0 3px color-mix(in srgb, var(--pac-danger) 22%, transparent);
+			}
+			.status-fault-line.fault .status-fault-label {
+				color: color-mix(in srgb, var(--pac-danger) 88%, var(--pac-text));
+			}
+			.status-fault-line.fault .status-fault-detail {
+				color: color-mix(in srgb, var(--pac-danger) 55%, var(--pac-text-soft));
+			}
+			.status-fault-line.unknown .status-fault-dot {
+				background: var(--pac-text-soft);
+				box-shadow: 0 0 0 3px color-mix(in srgb, var(--pac-text-soft) 16%, transparent);
+			}
+			.status-fault-line.unknown .status-fault-label {
+				color: var(--pac-text-soft);
 			}
 
 			.state-controls {
