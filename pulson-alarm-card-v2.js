@@ -383,10 +383,29 @@ class PulsonAlarmCard extends LitElement {
 		return raw.length === 1 ? partitions[0].entity.state : null
 	}
 
-	_stateHeadline(stateClass, uniformRawState = null) {
+	/** Partycje w stanie `triggered` (kanonicznie), kolejność jak na liście. */
+	_partitionsInAlarm(partitions) {
+		return partitions.filter((p) => this._canonicalAlarmPanelState(p.entity.state) === 'triggered')
+	}
+
+	_alarmPartitionNamesForHeadline(alarmPartitions) {
+		return alarmPartitions.map((p) => (p.index != null ? `${p.title} (#${p.index})` : p.title)).join(', ')
+	}
+
+	_stateHeadline(stateClass, uniformRawState = null, alarmPartitions = []) {
 		const fault = this._systemFaultStatus()
 		let base
-		if (stateClass === 'away')
+		if (alarmPartitions.length > 0) {
+			const names = this._alarmPartitionNamesForHeadline(alarmPartitions)
+			base = {
+				icon: 'mdi:bell-ring',
+				title: 'ALARM',
+				desc:
+					alarmPartitions.length === 1
+						? `Wykryto alarm na partycji: ${names}.`
+						: `Wykryto alarm na partycjach: ${names}.`,
+			}
+		} else if (stateClass === 'away')
 			base = { icon: 'mdi:home-lock', title: 'Tryb wyjścia', desc: 'Wszystkie partycje uzbrojone w trybie wyjścia' }
 		else if (stateClass === 'night')
 			base = { icon: 'mdi:weather-night', title: 'Tryb nocny', desc: 'System uzbrojony w trybie nocnym' }
@@ -813,7 +832,9 @@ class PulsonAlarmCard extends LitElement {
 	_renderControlPanel(partitions) {
 		const stateClass = this._stateForAll(partitions)
 		const uniformRaw = stateClass === 'delay' ? this._uniformPartitionRawState(partitions) : null
-		const headline = this._stateHeadline(stateClass, uniformRaw)
+		const alarmPartitions = this._partitionsInAlarm(partitions)
+		const headline = this._stateHeadline(stateClass, uniformRaw, alarmPartitions)
+		const statusModifierClass = alarmPartitions.length > 0 ? 'alarm' : stateClass
 		const canAway = partitions.some((p) => this._allowedActions(p).includes('alarm_arm_away'))
 		const canNight = partitions.some((p) => this._allowedActions(p).includes('alarm_arm_night'))
 		const canDisarm = partitions.some((p) => this._allowedActions(p).includes('alarm_disarm'))
@@ -821,7 +842,10 @@ class PulsonAlarmCard extends LitElement {
 
 		return html`
 			<div class="control-panel">
-				<div class="status-indicator ${stateClass} fault-${headline.faultLevel}" role="status" aria-live="polite">
+				<div
+					class="status-indicator ${statusModifierClass} fault-${headline.faultLevel}"
+					role=${alarmPartitions.length > 0 ? 'alert' : 'status'}
+					aria-live=${alarmPartitions.length > 0 ? 'assertive' : 'polite'}>
 					<div class="status-icon"><ha-icon icon=${headline.icon}></ha-icon></div>
 					<div class="status-info">
 						<div class="status-label">${headline.title}</div>
@@ -1168,6 +1192,21 @@ class PulsonAlarmCard extends LitElement {
 			}
 			.status-indicator.delay .status-icon {
 				background: linear-gradient(135deg, #0ea5e9, color-mix(in srgb, #0284c7 75%, #0f172a));
+			}
+			.status-indicator.alarm .status-icon {
+				background: linear-gradient(135deg, var(--pac-danger), color-mix(in srgb, #991b1b 55%, #0f172a));
+				animation: pac-header-alarm-pulse 2.2s ease-in-out infinite;
+			}
+			@keyframes pac-header-alarm-pulse {
+				0%,
+				100% {
+					filter: brightness(1);
+					box-shadow: 0 0 0 0 color-mix(in srgb, var(--pac-danger) 35%, transparent);
+				}
+				50% {
+					filter: brightness(1.08);
+					box-shadow: 0 0 0 6px color-mix(in srgb, var(--pac-danger) 12%, transparent);
+				}
 			}
 			.status-indicator.fault-fault {
 				box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pac-danger) 45%, transparent);
