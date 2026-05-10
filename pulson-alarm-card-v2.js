@@ -152,6 +152,81 @@ class PulsonAlarmCard extends LitElement {
 		return 'status-notReady'
 	}
 
+	_partitionReadySensorId(partition) {
+		if (!this._config || !partition?.index) return null
+		return `sensor.${this._config.gateway_slug}_partition_${partition.index}_ready`
+	}
+
+	/**
+	 * Gotowość do uzbrojenia z sensor.<slug>_partition_<n>_ready — tylko gdy partycja rozbrojona.
+	 * @returns {null | { variant: 'ready' | 'not_ready' | 'unknown', label: string }}
+	 */
+	_partitionReadinessLine(partition) {
+		if (partition.entity.state !== 'disarmed' || !partition.index) return null
+		const id = this._partitionReadySensorId(partition)
+		const ent = this._hass?.states[id]
+		if (!ent) {
+			return {
+				variant: 'unknown',
+				label: 'Stan gotowości niedostępny',
+			}
+		}
+		const s = String(ent.state ?? '')
+			.toLowerCase()
+			.trim()
+			.replace(/\s+/g, '_')
+
+		const readyStates = new Set([
+			'on',
+			'true',
+			'yes',
+			'ready',
+			'1',
+			'ok',
+			'gotowy',
+			'tak',
+			'armed_ready',
+			'arm_ready',
+		])
+		const notReadyStates = new Set([
+			'off',
+			'false',
+			'no',
+			'not_ready',
+			'notready',
+			'unready',
+			'0',
+			'brak',
+			'brak_gotowości',
+			'brak_gotowosci',
+			'nie',
+			'not_ok',
+			'violated',
+		])
+
+		if (readyStates.has(s)) {
+			return { variant: 'ready', label: 'Gotowy do uzbrojenia' }
+		}
+		if (notReadyStates.has(s) || s === 'nie_gotowy' || s.startsWith('niegotow')) {
+			return { variant: 'not_ready', label: 'Brak gotowości' }
+		}
+		const n = Number(s)
+		if (s !== '' && Number.isFinite(n)) {
+			if (n === 1) return { variant: 'ready', label: 'Gotowy do uzbrojenia' }
+			if (n === 0) return { variant: 'not_ready', label: 'Brak gotowości' }
+		}
+		if (s === 'unavailable' || s === 'unknown') {
+			return {
+				variant: 'unknown',
+				label: 'Stan gotowości nieznany',
+			}
+		}
+		return {
+			variant: 'unknown',
+			label: ent.state || 'Stan gotowości nieznany',
+		}
+	}
+
 	_zonesForPartition(partition) {
 		const slug = this._config.gateway_slug
 		const zones = Object.keys(this._hass.states)
@@ -513,6 +588,7 @@ class PulsonAlarmCard extends LitElement {
 					${partitions.map((partition) => {
 						const expanded = this._expandedPartitionId === partition.id
 						const zoneList = this._zonesForPartition(partition)
+						const readiness = this._partitionReadinessLine(partition)
 						return html`
 							<div class="partition-card">
 								<div class="partition-content">
@@ -522,7 +598,17 @@ class PulsonAlarmCard extends LitElement {
 											<span class="name">${partition.title}</span>
 											${partition.index ? html`<span class="id-label">Partycja #${partition.index}</span>` : ''}
 										</div>
-										<div class="partition-status">${this._stateLabel(partition.entity.state)}</div>
+										<div class="partition-meta">
+											<div class="partition-status">${this._stateLabel(partition.entity.state)}</div>
+											${readiness
+												? html`
+														<div class="partition-readiness ${readiness.variant}" role="status">
+															<span class="partition-readiness-dot" aria-hidden="true"></span>
+															<span class="partition-readiness-label">${readiness.label}</span>
+														</div>
+													`
+												: ''}
+										</div>
 									</div>
 									${this._primaryActionForPartition(partition)
 										? html`
@@ -856,10 +942,55 @@ class PulsonAlarmCard extends LitElement {
 				background: var(--pac-surface-2);
 				color: var(--pac-text-soft);
 			}
+			.partition-meta {
+				margin-top: 2px;
+				display: flex;
+				flex-direction: column;
+				gap: 3px;
+			}
 			.partition-status {
 				font-size: 0.73rem;
 				color: var(--pac-text-soft);
-				margin-top: 2px;
+				line-height: 1.3;
+			}
+			/* Gotowość: ta sama skala co strefy — kropka + tekst, bez osobnego „chipa” */
+			.partition-readiness {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				font-size: 0.72rem;
+				line-height: 1.3;
+				color: var(--pac-text-soft);
+			}
+			.partition-readiness-dot {
+				width: 6px;
+				height: 6px;
+				border-radius: 50%;
+				flex-shrink: 0;
+				background: var(--pac-text-soft);
+				opacity: 0.55;
+			}
+			.partition-readiness-label {
+				min-width: 0;
+				font-weight: 500;
+			}
+			.partition-readiness.ready .partition-readiness-dot {
+				background: var(--pac-ok);
+				opacity: 1;
+			}
+			.partition-readiness.ready .partition-readiness-label {
+				color: color-mix(in srgb, var(--pac-ok) 82%, var(--pac-text-soft));
+			}
+			.partition-readiness.not_ready .partition-readiness-dot {
+				background: var(--pac-warn);
+				opacity: 1;
+			}
+			.partition-readiness.not_ready .partition-readiness-label {
+				color: color-mix(in srgb, var(--pac-warn) 78%, var(--pac-text-soft));
+			}
+			.partition-readiness.unknown .partition-readiness-label {
+				color: var(--pac-text-soft);
+				font-weight: 400;
 			}
 			.quick-action {
 				border: 1px solid var(--pac-border);
