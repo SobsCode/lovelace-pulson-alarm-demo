@@ -82,12 +82,52 @@ class PulsonAlarmCard extends LitElement {
 	}
 
 	_partitionIndex(entityId) {
-		return (
+		const fromId =
 			Number(entityId.match(/_partition_(\d+)$/)?.[1]) ||
 			Number(entityId.match(/_pulson_partition_(\d+)$/)?.[1]) ||
 			Number(entityId.match(/_p([1-8])$/)?.[1]) ||
-			null
-		)
+			NaN
+		return Number.isFinite(fromId) && fromId > 0 ? fromId : null
+	}
+
+	_partitionIndexFromAttributes(entity) {
+		const raw =
+			entity.attributes?.partition ??
+			entity.attributes?.partition_id ??
+			entity.attributes?.partition_number
+		const n = raw === undefined || raw === null || raw === '' ? NaN : Number(raw)
+		return Number.isFinite(n) && n >= 1 && n <= 8 ? n : null
+	}
+
+	/** Encja `text.*_partition_multi_command`; puste / false = wyłącza ścieżkę maski. */
+	_partitionMultiCommandEntityId() {
+		const raw = this._config?.partition_multi_command_entity
+		if (raw === '' || raw === false) return null
+		if (raw) return raw
+		return `text.${this._config.gateway_slug}_partition_multi_command`
+	}
+
+	/** Mapowanie usługi HA → komendy mostka (tylko te obsługiwane przez multi-command). */
+	_bridgeCommandFromHaAlarmService(action) {
+		const map = {
+			alarm_arm_away: 'ARM_AWAY',
+			alarm_arm_night: 'ARM_NIGHT',
+			alarm_disarm: 'DISARM',
+		}
+		return map[action] ?? null
+	}
+
+	/**
+	 * Maska partycji: Pn → bit (n-1), suma bitów. Zwraca null, gdy brak indeksu lub poza 1–8.
+	 */
+	_partitionMaskFromTargets(targets) {
+		let mask = 0
+		for (const p of targets) {
+			const n = p.index
+			if (!Number.isFinite(n) || n < 1 || n > 8) return null
+			mask |= 1 << (n - 1)
+		}
+		return mask
 	}
 
 	_partitionIds() {
@@ -122,7 +162,7 @@ class PulsonAlarmCard extends LitElement {
 			.map((entityId) => {
 				const entity = this._hass.states[entityId]
 				if (!entity) return null
-				const index = this._partitionIndex(entityId)
+				const index = this._partitionIndex(entityId) ?? this._partitionIndexFromAttributes(entity)
 				return {
 					id: index ?? entityId,
 					entityId,
@@ -357,14 +397,32 @@ class PulsonAlarmCard extends LitElement {
 		if (!targets.length) return
 		this._isSending = true
 		try {
-			await Promise.all(
-				targets.map((partition) =>
-					this._hass.callService('alarm_control_panel', this._pendingAction, {
-						entity_id: partition.entityId,
-						code: this._pin,
-					}),
-				),
-			)
+			const multiId = this._partitionMultiCommandEntityId()
+			const bridgeCmd = this._bridgeCommandFromHaAlarmService(this._pendingAction)
+			const mask = this._partitionMaskFromTargets(targets)
+			const canMulti =
+				multiId &&
+				bridgeCmd &&
+				mask !== null &&
+				this._hass.states[multiId]
+
+			if (canMulti) {
+				const payload = { command: bridgeCmd, mask }
+				if (this._pin) payload.code = this._pin
+				await this._hass.callService('text', 'set_value', {
+					entity_id: multiId,
+					value: JSON.stringify(payload),
+				})
+			} else {
+				await Promise.all(
+					targets.map((partition) =>
+						this._hass.callService('alarm_control_panel', this._pendingAction, {
+							entity_id: partition.entityId,
+							code: this._pin,
+						}),
+					),
+				)
+			}
 			this._feedback = { type: 'success', text: `Wysłano komendę do ${targets.length} partycji.` }
 		} catch (_e) {
 			this._feedback = { type: 'error', text: 'Nie udało się wysłać komendy.' }
