@@ -100,10 +100,7 @@ class PulsonAlarmCard extends LitElement {
 	}
 
 	_partitionIndexFromAttributes(entity) {
-		const raw =
-			entity.attributes?.partition ??
-			entity.attributes?.partition_id ??
-			entity.attributes?.partition_number
+		const raw = entity.attributes?.partition ?? entity.attributes?.partition_id ?? entity.attributes?.partition_number
 		const n = raw === undefined || raw === null || raw === '' ? NaN : Number(raw)
 		return Number.isFinite(n) && n >= 1 && n <= 8 ? n : null
 	}
@@ -225,18 +222,7 @@ class PulsonAlarmCard extends LitElement {
 			.trim()
 			.replace(/\s+/g, '_')
 
-		const readyStates = new Set([
-			'on',
-			'true',
-			'yes',
-			'ready',
-			'1',
-			'ok',
-			'gotowy',
-			'tak',
-			'armed_ready',
-			'arm_ready',
-		])
+		const readyStates = new Set(['on', 'true', 'yes', 'ready', '1', 'ok', 'gotowy', 'tak', 'armed_ready', 'arm_ready'])
 		const notReadyStates = new Set([
 			'off',
 			'false',
@@ -416,11 +402,7 @@ class PulsonAlarmCard extends LitElement {
 			const multiId = this._partitionMultiCommandEntityId()
 			const bridgeCmd = this._bridgeCommandFromHaAlarmService(this._pendingAction)
 			const mask = this._partitionMaskFromTargets(targets)
-			const canMulti =
-				multiId &&
-				bridgeCmd &&
-				mask !== null &&
-				this._hass.states[multiId]
+			const canMulti = multiId && bridgeCmd && mask !== null && this._hass.states[multiId]
 
 			if (canMulti) {
 				const payload = { command: bridgeCmd, mask }
@@ -617,7 +599,7 @@ class PulsonAlarmCard extends LitElement {
 		if (spec.disabled) return 'Ta akcja jest niedostępna.'
 		const v = this._specialSliders[spec.kind]
 		if (v >= 100) return 'Przytrzymaj chwilę na końcu, aby potwierdzić.'
-		return 'Przeciągnij suwak do końca i przytrzymaj, aby wysłać wygenerować alarm napadowy.'
+		return 'Przeciągnij suwak do końca i przytrzymaj, aby wygenerować alarm napadowy.'
 	}
 
 	_renderSpecialAlarmDrawer() {
@@ -677,8 +659,7 @@ class PulsonAlarmCard extends LitElement {
 			return {
 				level: 'unavailable',
 				title: 'Panel niedostępny',
-				message:
-					'Home Assistant nie odczytuje stanu połączenia z centralą. Sprawdź integrację, sieć i centralę.',
+				message: 'Home Assistant nie odczytuje stanu połączenia z centralą. Sprawdź integrację, sieć i centralę.',
 			}
 		}
 		if (s === 'unknown') {
@@ -742,7 +723,9 @@ class PulsonAlarmCard extends LitElement {
 					</button>
 
 					<button
-						class="state-button-wrapper night ${canNight ? '' : 'disabled'} ${pa === 'alarm_arm_night' ? 'selected' : ''}"
+						class="state-button-wrapper night ${canNight ? '' : 'disabled'} ${pa === 'alarm_arm_night'
+							? 'selected'
+							: ''}"
 						?disabled=${!canNight}
 						@click=${() => this._setAllPartitionsAction('alarm_arm_night')}>
 						<div class="state-button"><ha-icon icon="mdi:weather-night"></ha-icon></div>
@@ -751,7 +734,9 @@ class PulsonAlarmCard extends LitElement {
 					</button>
 
 					<button
-						class="state-button-wrapper disarm ${canDisarm ? '' : 'disabled'} ${pa === 'alarm_disarm' ? 'selected' : ''}"
+						class="state-button-wrapper disarm ${canDisarm ? '' : 'disabled'} ${pa === 'alarm_disarm'
+							? 'selected'
+							: ''}"
 						?disabled=${!canDisarm}
 						@click=${() => this._setAllPartitionsAction('alarm_disarm')}>
 						<div class="state-button"><ha-icon icon="mdi:lock-open-variant-outline"></ha-icon></div>
@@ -767,7 +752,6 @@ class PulsonAlarmCard extends LitElement {
 		return html`
 			<ha-card class="dashboard pin-mode">
 				${this._feedback ? html`<div class="feedback ${this._feedback.type}">${this._feedback.text}</div>` : ''}
-
 				${this._renderControlPanel(partitions)}
 
 				<div class="pin-mode-panel">
@@ -807,7 +791,9 @@ class PulsonAlarmCard extends LitElement {
 	render() {
 		if (!this._hass || !this._config) return html``
 		if (this._panelConnectivity().level !== 'ok') {
-			return html`<ha-card class="dashboard dashboard-connectivity-only">${this._renderPanelConnectivityBanner()}</ha-card>`
+			return html`<ha-card class="dashboard dashboard-connectivity-only"
+				>${this._renderPanelConnectivityBanner()}</ha-card
+			>`
 		}
 
 		const partitions = this._partitions()
@@ -824,7 +810,6 @@ class PulsonAlarmCard extends LitElement {
 		return html`
 			<ha-card class="dashboard">
 				${this._renderControlPanel(partitions)}
-
 				${this._feedback ? html`<div class="feedback ${this._feedback.type}">${this._feedback.text}</div>` : ''}
 
 				<div class="partitions-list">
