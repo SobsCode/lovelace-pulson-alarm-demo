@@ -17,8 +17,8 @@ class PulsonAlarmCard extends LitElement {
 			_pin: { state: true },
 			_isSending: { state: true },
 			_feedback: { state: true },
-			_panicSlider: { state: true },
-			_panicResetting: { state: true },
+			_specialSliders: { state: true },
+			_specialResetting: { state: true },
 			_pendingTargets: { state: true },
 		}
 	}
@@ -33,10 +33,15 @@ class PulsonAlarmCard extends LitElement {
 		this._pin = ''
 		this._isSending = false
 		this._feedback = null
-		this._panicSlider = 0
-		this._panicResetting = false
+		this._specialSliders = { panic: 0, fire: 0, medical: 0 }
+		this._specialResetting = { panic: false, fire: false, medical: false }
 		this._pendingTargets = null
-		this._panicHoldTimer = null
+		this._specialHoldTimer = null
+	}
+
+	disconnectedCallback() {
+		super.disconnectedCallback()
+		this._clearSpecialHoldTimer()
 	}
 
 	setConfig(config) {
@@ -48,6 +53,10 @@ class PulsonAlarmCard extends LitElement {
 			gateway_slug: 'pulson_security_integration_gateway',
 			panic_service: null,
 			panic_service_data: {},
+			/** Encja `button` z MQTT discovery: `{base_topic}/system/panic/set` */
+			panic_button_entity: null,
+			fire_alarm_button_entity: null,
+			medical_alarm_button_entity: null,
 			...config,
 		}
 	}
@@ -430,7 +439,7 @@ class PulsonAlarmCard extends LitElement {
 					),
 				)
 			}
-			this._feedback = { type: 'success', text: `Wysłano komendę do ${targets.length} partycji.` }
+			this._feedback = null
 		} catch (_e) {
 			this._feedback = { type: 'error', text: 'Nie udało się wysłać komendy.' }
 		} finally {
@@ -438,27 +447,151 @@ class PulsonAlarmCard extends LitElement {
 			this._pendingAction = null
 			this._pendingTargets = null
 			this._pin = ''
+			this._drawerOpen = false
 		}
 	}
 
-	async _triggerPanic() {
+	async _triggerPanicService() {
 		if (!this._config.panic_service) return
 		const [domain, service] = this._config.panic_service.split('.')
 		if (!domain || !service) return
 		await this._hass.callService(domain, service, this._config.panic_service_data || {})
 	}
 
-	_updatePanicSlider(value) {
+	_panicDrawerRowSpec() {
+		const entityId = this._config.panic_button_entity
+		const hasService = !!this._config.panic_service
+		if (!entityId && !hasService) return null
+		const ent = entityId && this._hass?.states ? this._hass.states[entityId] : null
+		if (ent)
+			return {
+				kind: 'panic',
+				variant: 'panic',
+				icon: 'mdi:alarm-light',
+				label: 'Alarm napadowy',
+				disabled: false,
+				trigger: 'button',
+			}
+		if (hasService)
+			return {
+				kind: 'panic',
+				variant: 'panic',
+				icon: 'mdi:alarm-light',
+				label: 'Alarm napadowy',
+				disabled: false,
+				trigger: 'service',
+			}
+		return {
+			kind: 'panic',
+			variant: 'panic',
+			icon: 'mdi:alarm-light',
+			label: 'Alarm napadowy',
+			disabled: true,
+			trigger: 'none',
+			blockedHint: 'Encja przycisku napadu jest niedostępna. Sprawdź panic_button_entity lub ustaw panic_service.',
+		}
+	}
+
+	_fireDrawerRowSpec() {
+		const id = this._config.fire_alarm_button_entity
+		if (!id) return null
+		const ent = this._hass?.states?.[id]
+		if (ent)
+			return {
+				kind: 'fire',
+				variant: 'fire',
+				icon: 'mdi:fire',
+				label: 'Alarm pożarowy',
+				disabled: false,
+				trigger: 'button',
+			}
+		return {
+			kind: 'fire',
+			variant: 'fire',
+			icon: 'mdi:fire',
+			label: 'Alarm pożarowy',
+			disabled: true,
+			trigger: 'none',
+			blockedHint: 'Encja przycisku pożaru jest niedostępna.',
+		}
+	}
+
+	_medicalDrawerRowSpec() {
+		const id = this._config.medical_alarm_button_entity
+		if (!id) return null
+		const ent = this._hass?.states?.[id]
+		if (ent)
+			return {
+				kind: 'medical',
+				variant: 'medical',
+				icon: 'mdi:medical-bag',
+				label: 'Alarm medyczny',
+				disabled: false,
+				trigger: 'button',
+			}
+		return {
+			kind: 'medical',
+			variant: 'medical',
+			icon: 'mdi:medical-bag',
+			label: 'Alarm medyczny',
+			disabled: true,
+			trigger: 'none',
+			blockedHint: 'Encja przycisku alarmu medycznego jest niedostępna.',
+		}
+	}
+
+	_specialAlarmDrawerSpecs() {
+		return [this._panicDrawerRowSpec(), this._fireDrawerRowSpec(), this._medicalDrawerRowSpec()].filter(Boolean)
+	}
+
+	async _triggerSpecialAlarm(kind) {
+		if (!this._hass) return
+		try {
+			if (kind === 'panic') {
+				const id = this._config.panic_button_entity
+				if (id && this._hass.states[id]) {
+					await this._hass.callService('button', 'press', { entity_id: id })
+					return
+				}
+				await this._triggerPanicService()
+				return
+			}
+			if (kind === 'fire') {
+				const id = this._config.fire_alarm_button_entity
+				if (id && this._hass.states[id]) {
+					await this._hass.callService('button', 'press', { entity_id: id })
+				}
+				return
+			}
+			if (kind === 'medical') {
+				const id = this._config.medical_alarm_button_entity
+				if (id && this._hass.states[id]) {
+					await this._hass.callService('button', 'press', { entity_id: id })
+				}
+			}
+		} catch (_e) {
+			this._feedback = { type: 'error', text: 'Nie udało się wysłać alarmu specjalnego.' }
+		}
+	}
+
+	_clearSpecialHoldTimer() {
+		if (this._specialHoldTimer) {
+			clearTimeout(this._specialHoldTimer)
+			this._specialHoldTimer = null
+		}
+	}
+
+	_updateSpecialSlider(kind, value) {
 		const normalized = Number(value)
-		this._panicSlider = normalized
-		if (normalized >= 100 && !this._panicHoldTimer) {
+		this._specialSliders = { ...this._specialSliders, [kind]: normalized }
+		if (normalized >= 100 && !this._specialHoldTimer) {
 			if (navigator.vibrate) navigator.vibrate(120)
-			this._panicHoldTimer = setTimeout(() => {
-				this._panicHoldTimer = null
-				if (this._panicSlider >= 100) {
+			this._specialHoldTimer = setTimeout(() => {
+				this._specialHoldTimer = null
+				if (this._specialSliders[kind] >= 100) {
 					if (navigator.vibrate) navigator.vibrate([100, 60, 140])
-					this._triggerPanic()
-					this._resetPanicSlider()
+					this._triggerSpecialAlarm(kind)
+					this._resetSpecialSlider(kind)
 				}
 			}, 280)
 			return
@@ -466,20 +599,64 @@ class PulsonAlarmCard extends LitElement {
 		if (normalized >= 90 && navigator.vibrate) navigator.vibrate(40)
 	}
 
-	_resetPanicSlider() {
-		if (this._panicHoldTimer) {
-			clearTimeout(this._panicHoldTimer)
-			this._panicHoldTimer = null
-		}
-		this._panicResetting = true
-		this._panicSlider = 0
+	_resetSpecialSlider(kind) {
+		this._clearSpecialHoldTimer()
+		this._specialResetting = { ...this._specialResetting, [kind]: true }
+		this._specialSliders = { ...this._specialSliders, [kind]: 0 }
 		setTimeout(() => {
-			this._panicResetting = false
+			this._specialResetting = { ...this._specialResetting, [kind]: false }
 		}, 260)
 	}
 
-	_handlePanicRelease() {
-		if (this._panicSlider < 100) this._resetPanicSlider()
+	_handleSpecialRelease(kind) {
+		if (this._specialSliders[kind] < 100) this._resetSpecialSlider(kind)
+	}
+
+	_specialRowHint(spec) {
+		if (spec.disabled && spec.blockedHint) return spec.blockedHint
+		if (spec.disabled) return 'Ta akcja jest niedostępna.'
+		const v = this._specialSliders[spec.kind]
+		if (v >= 100) return 'Przytrzymaj chwilę na końcu, aby potwierdzić.'
+		return 'Przeciągnij suwak do końca i przytrzymaj, aby wysłać komendę do centrali.'
+	}
+
+	_renderSpecialAlarmDrawer() {
+		const specs = this._specialAlarmDrawerSpecs()
+		if (!specs.length) {
+			return html`
+				<div class="special-alarm-empty">
+					Ustaw w konfiguracji karty encje przycisków MQTT (<code>panic_button_entity</code>,
+					<code>fire_alarm_button_entity</code>, <code>medical_alarm_button_entity</code>) albo
+					<code>panic_service</code> dla napadu.
+				</div>
+			`
+		}
+		return specs.map(
+			(spec) => html`
+				<div class="special-alarm-row variant-${spec.variant} ${spec.disabled ? 'disabled' : ''}">
+					<div class="special-alarm-header">
+						<ha-icon icon=${spec.icon}></ha-icon>
+						<span>${spec.label}</span>
+					</div>
+					<div class="special-track">
+						<div class="special-progress" style=${`width:${this._specialSliders[spec.kind]}%`}></div>
+						<input
+							class="special-slider ${this._specialResetting[spec.kind] ? 'resetting' : ''}"
+							type="range"
+							min="0"
+							max="100"
+							step="1"
+							.value=${String(this._specialSliders[spec.kind])}
+							?disabled=${spec.disabled}
+							@input=${(e) => !spec.disabled && this._updateSpecialSlider(spec.kind, e.target.value)}
+							@change=${() => this._handleSpecialRelease(spec.kind)}
+							@mouseup=${() => this._handleSpecialRelease(spec.kind)}
+							@touchend=${() => this._handleSpecialRelease(spec.kind)} />
+					</div>
+					<div class="special-hint">${this._specialRowHint(spec)}</div>
+				</div>
+			`,
+		)
 	}
 
 	/** Stan binary_sensor.<gateway>_panel_online — poza `on` pokazujemy wyraźny baner. */
@@ -612,6 +789,7 @@ class PulsonAlarmCard extends LitElement {
 							this._pendingAction = null
 							this._pendingTargets = null
 							this._pin = ''
+							this._drawerOpen = false
 						}}>
 						Anuluj
 					</button>
@@ -733,35 +911,7 @@ class PulsonAlarmCard extends LitElement {
 						<span>Alarmy specjalne</span>
 					</button>
 
-					<div class="drawer-content">
-						<div class="panic-slider-container">
-							<div class="panic-header">
-								<ha-icon icon="mdi:alarm-light"></ha-icon>
-								<span>Alarm napadowy</span>
-							</div>
-							<div class="panic-track">
-								<div class="panic-progress" style=${`width:${this._panicSlider}%`}></div>
-								<input
-									class="panic-slider ${this._panicResetting ? 'resetting' : ''}"
-									type="range"
-									min="0"
-									max="100"
-									step="1"
-									.value=${String(this._panicSlider)}
-									@input=${(e) => this._updatePanicSlider(e.target.value)}
-									@change=${this._handlePanicRelease}
-									@mouseup=${this._handlePanicRelease}
-									@touchend=${this._handlePanicRelease} />
-							</div>
-							<div class="panic-hint">
-								${this._config.panic_service
-									? this._panicSlider >= 100
-										? 'Przytrzymaj chwilę na końcu, aby potwierdzić Napad.'
-										: 'Przeciągnij i przytrzymaj na końcu, aby aktywować Napad.'
-									: 'Ustaw panic_service w config, aby aktywować.'}
-							</div>
-						</div>
-					</div>
+					<div class="drawer-content special-alarm-drawer">${this._renderSpecialAlarmDrawer()}</div>
 				</div>
 			</ha-card>
 		`
@@ -1121,6 +1271,7 @@ class PulsonAlarmCard extends LitElement {
 				bottom: 0;
 				left: 0;
 				right: 0;
+				z-index: 3;
 				border-top: 1px solid var(--pac-border);
 				background: linear-gradient(
 					180deg,
@@ -1134,6 +1285,8 @@ class PulsonAlarmCard extends LitElement {
 				border: none;
 				background: transparent;
 				color: var(--pac-text-soft);
+				position: relative;
+				z-index: 4;
 				display: inline-flex;
 				align-items: center;
 				justify-content: center;
@@ -1213,13 +1366,32 @@ class PulsonAlarmCard extends LitElement {
 				cursor: not-allowed;
 			}
 
-			.panic-slider-container {
+			.drawer-content.special-alarm-drawer {
+				display: none;
+			}
+			.action-drawer.expanded .drawer-content.special-alarm-drawer {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+			.special-alarm-empty {
+				font-size: 0.72rem;
+				color: var(--pac-text-soft);
+				line-height: 1.4;
+			}
+			.special-alarm-empty code {
+				font-size: 0.65rem;
+			}
+			.special-alarm-row {
 				border-radius: 12px;
 				border: 1px solid var(--pac-border);
 				background: var(--pac-surface);
 				padding: 10px;
 			}
-			.panic-header {
+			.special-alarm-row.disabled {
+				opacity: 0.72;
+			}
+			.special-alarm-header {
 				display: flex;
 				align-items: center;
 				gap: 6px;
@@ -1227,10 +1399,16 @@ class PulsonAlarmCard extends LitElement {
 				font-size: 0.8rem;
 				margin-bottom: 8px;
 			}
-			.panic-header ha-icon {
+			.special-alarm-row.variant-panic .special-alarm-header ha-icon {
 				color: var(--pac-danger);
 			}
-			.panic-track {
+			.special-alarm-row.variant-fire .special-alarm-header ha-icon {
+				color: var(--pac-warn);
+			}
+			.special-alarm-row.variant-medical .special-alarm-header ha-icon {
+				color: color-mix(in srgb, var(--pac-accent) 70%, var(--pac-ok) 30%);
+			}
+			.special-track {
 				position: relative;
 				height: 50px;
 				border-radius: 999px;
@@ -1238,17 +1416,33 @@ class PulsonAlarmCard extends LitElement {
 				border: 1px solid var(--pac-border);
 				overflow: hidden;
 			}
-			.panic-progress {
-				position: absolute;
-				inset: 0 auto 0 0;
+			.special-alarm-row.variant-panic .special-progress {
 				background: linear-gradient(
 					90deg,
 					color-mix(in srgb, var(--pac-danger) 25%, transparent),
 					color-mix(in srgb, var(--pac-danger) 50%, transparent)
 				);
+			}
+			.special-alarm-row.variant-fire .special-progress {
+				background: linear-gradient(
+					90deg,
+					color-mix(in srgb, var(--pac-warn) 22%, transparent),
+					color-mix(in srgb, var(--pac-warn) 48%, transparent)
+				);
+			}
+			.special-alarm-row.variant-medical .special-progress {
+				background: linear-gradient(
+					90deg,
+					color-mix(in srgb, var(--pac-accent) 22%, transparent),
+					color-mix(in srgb, var(--pac-ok) 35%, transparent)
+				);
+			}
+			.special-progress {
+				position: absolute;
+				inset: 0 auto 0 0;
 				pointer-events: none;
 			}
-			.panic-slider {
+			.special-slider {
 				position: absolute;
 				inset: 0;
 				width: 100%;
@@ -1257,11 +1451,15 @@ class PulsonAlarmCard extends LitElement {
 				-webkit-appearance: none;
 				appearance: none;
 			}
-			.panic-slider::-webkit-slider-runnable-track {
+			.special-slider:disabled {
+				cursor: not-allowed;
+				opacity: 0.55;
+			}
+			.special-slider::-webkit-slider-runnable-track {
 				height: 50px;
 				background: transparent;
 			}
-			.panic-slider::-webkit-slider-thumb {
+			.special-alarm-row.variant-panic .special-slider::-webkit-slider-thumb {
 				-webkit-appearance: none;
 				appearance: none;
 				width: 42px;
@@ -1272,12 +1470,34 @@ class PulsonAlarmCard extends LitElement {
 				background: var(--pac-danger);
 				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-danger) 40%, transparent);
 			}
-			.panic-slider::-moz-range-track {
+			.special-alarm-row.variant-fire .special-slider::-webkit-slider-thumb {
+				-webkit-appearance: none;
+				appearance: none;
+				width: 42px;
+				height: 42px;
+				margin-top: 4px;
+				border-radius: 999px;
+				border: 2px solid #ffffff;
+				background: var(--pac-warn);
+				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-warn) 38%, transparent);
+			}
+			.special-alarm-row.variant-medical .special-slider::-webkit-slider-thumb {
+				-webkit-appearance: none;
+				appearance: none;
+				width: 42px;
+				height: 42px;
+				margin-top: 4px;
+				border-radius: 999px;
+				border: 2px solid #ffffff;
+				background: color-mix(in srgb, var(--pac-accent) 55%, var(--pac-ok) 45%);
+				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-accent) 35%, transparent);
+			}
+			.special-slider::-moz-range-track {
 				height: 50px;
 				background: transparent;
 				border: none;
 			}
-			.panic-slider::-moz-range-thumb {
+			.special-alarm-row.variant-panic .special-slider::-moz-range-thumb {
 				width: 42px;
 				height: 42px;
 				border: 2px solid #ffffff;
@@ -1285,10 +1505,26 @@ class PulsonAlarmCard extends LitElement {
 				background: var(--pac-danger);
 				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-danger) 40%, transparent);
 			}
-			.panic-slider.resetting {
+			.special-alarm-row.variant-fire .special-slider::-moz-range-thumb {
+				width: 42px;
+				height: 42px;
+				border: 2px solid #ffffff;
+				border-radius: 999px;
+				background: var(--pac-warn);
+				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-warn) 38%, transparent);
+			}
+			.special-alarm-row.variant-medical .special-slider::-moz-range-thumb {
+				width: 42px;
+				height: 42px;
+				border: 2px solid #ffffff;
+				border-radius: 999px;
+				background: color-mix(in srgb, var(--pac-accent) 55%, var(--pac-ok) 45%);
+				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-accent) 35%, transparent);
+			}
+			.special-slider.resetting {
 				transition: all 0.25s ease;
 			}
-			.panic-hint {
+			.special-hint {
 				margin-top: 6px;
 				font-size: 0.69rem;
 				color: var(--pac-text-soft);

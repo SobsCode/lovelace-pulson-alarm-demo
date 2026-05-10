@@ -14,7 +14,7 @@ The current version ports core layout and behavior from an Angular mobile `parti
 - Partition list with expandable zone view (`sensor.<slug>_zone_<n>`)
 - Bottom drawer for:
   - action confirmation and PIN entry
-  - optional panic slider action (configurable service call)
+  - optional special alarms (hold-to-confirm slider): MQTT `button` entities for panic / fire / medical, or legacy `panic_service`
 - Uses `supported_features` to show only valid actions
 
 ## Installation (HACS)
@@ -43,9 +43,15 @@ The current version ports core layout and behavior from an Angular mobile `parti
 type: custom:pulson-alarm-card
 name: Pulson Alarm
 gateway_slug: pulson_security_integration_gateway
-panic_service: script.pulson_panic
-panic_service_data: {}
+panic_button_entity: button.pulson_system_panic
+fire_alarm_button_entity: button.pulson_system_fire_alarm
+medical_alarm_button_entity: button.pulson_system_medical_alarm
+# Legacy alternative for panic only:
+# panic_service: script.pulson_panic
+# panic_service_data: {}
 ```
+
+Entity IDs must match your MQTT discovery / device name (examples use `pulson_system_*`; yours may differ).
 
 ### With explicit seed entity
 
@@ -72,4 +78,5 @@ entities:
 - The card supports modern partition naming (`_partition_<n>`) and legacy variants.
 - If partitions are not found, verify `gateway_slug` and entity IDs in Home Assistant.
 - After each update of card JS, use hard refresh to bypass browser cache.
-- `panic_service` is optional. Format: `<domain>.<service>`, e.g. `script.pulson_panic`.
+- Special alarms: set `panic_button_entity`, `fire_alarm_button_entity`, and/or `medical_alarm_button_entity` to your `button.*` entities (they publish `PRESS` on the bridge topics). If the panic button entity is missing but `panic_service` is set, the card falls back to that service for panic only.
+- `panic_service` / `panic_service_data` are optional (legacy). Format: `<domain>.<service>`.
