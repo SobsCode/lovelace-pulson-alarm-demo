@@ -1058,27 +1058,40 @@ class PulsonAlarmCard extends LitElement {
 		return css`
 			:host {
 				display: block;
+				-webkit-font-smoothing: antialiased;
+				-moz-osx-font-smoothing: grayscale;
+				font-family: var(
+					--ha-font-family-body,
+					'Roboto',
+					'Google Sans',
+					system-ui,
+					-apple-system,
+					'Segoe UI',
+					sans-serif
+				);
 				--pac-bg: var(--ha-card-background, var(--card-background-color, #ffffff));
-				--pac-bg-soft: color-mix(in srgb, var(--pac-bg) 92%, var(--primary-text-color) 8%);
-				--pac-surface: color-mix(in srgb, var(--pac-bg) 86%, var(--primary-text-color) 14%);
-				--pac-surface-2: color-mix(in srgb, var(--pac-bg) 80%, var(--primary-text-color) 20%);
-				--pac-border: color-mix(in srgb, var(--divider-color, #d1d5db) 80%, transparent);
-				--pac-text: var(--primary-text-color, #111827);
-				--pac-text-soft: var(--secondary-text-color, #64748b);
-				--pac-ok: var(--success-color, #16a34a);
-				--pac-warn: var(--warning-color, #f59e0b);
-				--pac-danger: var(--error-color, #dc2626);
-				--pac-accent: var(--primary-color, #3b82f6);
+				--pac-bg-soft: color-mix(in srgb, var(--pac-bg) 94%, var(--primary-text-color) 6%);
+				--pac-surface: color-mix(in srgb, var(--pac-bg) 91%, var(--primary-text-color) 9%);
+				--pac-surface-2: color-mix(in srgb, var(--pac-bg) 86%, var(--primary-text-color) 14%);
+				--pac-border: color-mix(in srgb, var(--divider-color, #e0e0e0) 55%, var(--pac-bg) 45%);
+				--pac-text: var(--primary-text-color, #1f1f1f);
+				--pac-text-soft: var(--secondary-text-color, #5f6368);
+				--pac-ok: var(--success-color, #1e8e3e);
+				--pac-warn: var(--warning-color, #f9ab00);
+				--pac-danger: var(--error-color, #d93025);
+				--pac-accent: var(--primary-color, #1a73e8);
+				--pac-elev-1: 0 1px 2px rgba(60, 64, 67, 0.12), 0 1px 3px 1px rgba(60, 64, 67, 0.08);
+				--pac-elev-2: 0 1px 3px rgba(60, 64, 67, 0.14), 0 4px 8px 3px rgba(60, 64, 67, 0.08);
+				--pac-radius-xl: 16px;
+				--pac-radius-lg: 12px;
+				--pac-radius-md: 8px;
 			}
 			.dashboard {
-				border-radius: 18px;
-				background: linear-gradient(
-					165deg,
-					color-mix(in srgb, var(--pac-bg) 96%, var(--pac-accent) 4%),
-					color-mix(in srgb, var(--pac-bg) 96%, var(--pac-warn) 4%)
-				);
+				border-radius: var(--pac-radius-xl);
+				background: var(--pac-bg);
 				color: var(--pac-text);
 				border: 1px solid var(--pac-border);
+				box-shadow: var(--pac-elev-1);
 				overflow: hidden;
 			}
 			.dashboard-connectivity-only {
@@ -1092,11 +1105,11 @@ class PulsonAlarmCard extends LitElement {
 			.panel-connectivity-banner {
 				display: flex;
 				align-items: flex-start;
-				gap: 12px;
-				padding: 12px 14px;
-				border-bottom: 2px solid var(--pac-border);
-				font-size: 0.82rem;
-				line-height: 1.35;
+				gap: 14px;
+				padding: 16px;
+				border-bottom: 1px solid var(--pac-border);
+				font-size: 0.875rem;
+				line-height: 1.43;
 			}
 			.panel-connectivity-banner.unavailable {
 				background: color-mix(in srgb, var(--pac-danger) 22%, var(--pac-bg));
@@ -1111,12 +1124,13 @@ class PulsonAlarmCard extends LitElement {
 			}
 			.panel-connectivity-icon {
 				flex-shrink: 0;
-				width: 40px;
-				height: 40px;
-				border-radius: 10px;
+				width: 44px;
+				height: 44px;
+				border-radius: var(--pac-radius-md);
 				display: grid;
 				place-items: center;
-				background: color-mix(in srgb, var(--pac-bg) 55%, transparent);
+				background: color-mix(in srgb, var(--pac-bg) 88%, var(--primary-text-color) 12%);
+				box-shadow: var(--pac-elev-1);
 			}
 			.panel-connectivity-banner.unavailable .panel-connectivity-icon {
 				color: var(--pac-danger);
@@ -1128,8 +1142,9 @@ class PulsonAlarmCard extends LitElement {
 				--mdc-icon-size: 26px;
 			}
 			.panel-connectivity-title {
-				font-weight: 800;
-				font-size: 0.92rem;
+				font-weight: 500;
+				font-size: 0.9375rem;
+				letter-spacing: 0.00625em;
 				margin-bottom: 4px;
 			}
 			.panel-connectivity-desc {
@@ -1147,54 +1162,65 @@ class PulsonAlarmCard extends LitElement {
 			}
 
 			.control-panel {
-				padding: 14px;
+				padding: 16px;
 			}
 			.status-indicator {
 				display: flex;
-				gap: 12px;
+				gap: 14px;
 				align-items: center;
-				border-radius: 14px;
-				padding: 14px;
-				margin-bottom: 14px;
+				border-radius: var(--pac-radius-xl);
+				padding: 16px;
+				margin-bottom: 16px;
 				background: var(--pac-surface);
+				border: 1px solid color-mix(in srgb, var(--pac-border) 70%, transparent);
+				box-shadow: var(--pac-elev-1);
 			}
 			.status-icon {
-				width: 44px;
-				height: 44px;
+				width: 48px;
+				height: 48px;
 				border-radius: 50%;
 				display: grid;
 				place-items: center;
-				background: linear-gradient(135deg, var(--pac-accent), color-mix(in srgb, var(--pac-accent) 65%, #000000));
+				flex-shrink: 0;
+				color: #fff;
+				background: var(--pac-accent);
+				box-shadow: var(--pac-elev-1);
 			}
 			.status-icon ha-icon {
 				--mdc-icon-size: 24px;
+				color: #fff;
 			}
 			.status-label {
-				font-size: 1rem;
-				font-weight: 700;
+				font-size: 1.125rem;
+				font-weight: 400;
+				letter-spacing: 0;
+				line-height: 1.35;
 			}
 			.status-description {
-				font-size: 0.75rem;
+				font-size: 0.8125rem;
+				font-weight: 400;
 				color: var(--pac-text-soft);
-				margin-top: 2px;
+				line-height: 1.43;
+				margin-top: 4px;
+				max-width: 56ch;
 			}
 			.status-indicator.away .status-icon {
-				background: linear-gradient(135deg, var(--pac-danger), color-mix(in srgb, var(--pac-danger) 70%, #000000));
+				background: color-mix(in srgb, var(--pac-danger) 94%, #000 6%);
 			}
 			.status-indicator.night .status-icon {
-				background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+				background: #6750a4;
 			}
 			.status-indicator.disarm .status-icon {
-				background: linear-gradient(135deg, var(--pac-ok), color-mix(in srgb, var(--pac-ok) 70%, #000000));
+				background: color-mix(in srgb, var(--pac-ok) 92%, #000 8%);
 			}
 			.status-indicator.partial .status-icon {
-				background: linear-gradient(135deg, var(--pac-warn), color-mix(in srgb, var(--pac-warn) 70%, #000000));
+				background: color-mix(in srgb, var(--pac-warn) 90%, #000 10%);
 			}
 			.status-indicator.delay .status-icon {
-				background: linear-gradient(135deg, #0ea5e9, color-mix(in srgb, #0284c7 75%, #0f172a));
+				background: #039be5;
 			}
 			.status-indicator.alarm .status-icon {
-				background: linear-gradient(135deg, var(--pac-danger), color-mix(in srgb, #991b1b 55%, #0f172a));
+				background: color-mix(in srgb, var(--pac-danger) 96%, #000 4%);
 				animation: pac-header-alarm-pulse 2.2s ease-in-out infinite;
 			}
 			@keyframes pac-header-alarm-pulse {
@@ -1217,12 +1243,12 @@ class PulsonAlarmCard extends LitElement {
 			.status-fault-line {
 				display: flex;
 				align-items: flex-start;
-				gap: 7px;
-				margin-top: 8px;
-				padding-top: 8px;
+				gap: 8px;
+				margin-top: 12px;
+				padding-top: 12px;
 				border-top: 1px solid color-mix(in srgb, var(--pac-border) 75%, transparent);
-				font-size: 0.72rem;
-				line-height: 1.35;
+				font-size: 0.8125rem;
+				line-height: 1.43;
 			}
 			.status-fault-dot {
 				width: 8px;
@@ -1236,7 +1262,7 @@ class PulsonAlarmCard extends LitElement {
 				display: block;
 			}
 			.status-fault-label {
-				font-weight: 700;
+				font-weight: 500;
 			}
 			.status-fault-sep {
 				margin: 0 0.28em;
@@ -1244,7 +1270,7 @@ class PulsonAlarmCard extends LitElement {
 				font-weight: 400;
 			}
 			.status-fault-detail {
-				font-weight: 500;
+				font-weight: 400;
 				color: var(--pac-text-soft);
 			}
 			.status-fault-line.ok .status-fault-dot {
@@ -1275,57 +1301,72 @@ class PulsonAlarmCard extends LitElement {
 			.state-controls {
 				display: grid;
 				grid-template-columns: repeat(3, minmax(0, 1fr));
-				gap: 10px;
+				gap: 8px;
 			}
 			.state-button-wrapper {
-				border-radius: 14px;
+				border-radius: var(--pac-radius-lg);
 				border: 1px solid var(--pac-border);
-				background: var(--pac-surface);
+				background: var(--pac-bg-soft);
 				color: var(--pac-text);
-				padding: 10px;
+				padding: 12px 8px;
 				text-align: center;
 				cursor: pointer;
+				transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+			}
+			.state-button-wrapper:hover:not(.disabled) {
+				background: var(--pac-surface);
+				box-shadow: var(--pac-elev-1);
 			}
 			.state-button-wrapper.disabled {
-				opacity: 0.5;
+				opacity: 0.38;
 				cursor: not-allowed;
 			}
 			.state-button-wrapper.selected {
-				box-shadow: inset 0 0 0 2px var(--pac-accent);
+				background: color-mix(in srgb, var(--pac-accent) 10%, var(--pac-bg));
 				border-color: color-mix(in srgb, var(--pac-accent) 45%, var(--pac-border));
+				box-shadow: 0 0 0 1px color-mix(in srgb, var(--pac-accent) 35%, transparent);
 			}
 			.state-button {
-				width: 50px;
-				height: 50px;
-				margin: 0 auto 8px;
+				width: 48px;
+				height: 48px;
+				margin: 0 auto 10px;
 				border-radius: 50%;
 				display: grid;
 				place-items: center;
+				color: #fff;
+				box-shadow: var(--pac-elev-1);
+			}
+			.state-button ha-icon {
+				color: #fff;
 			}
 			.state-button-wrapper.away .state-button {
-				background: linear-gradient(135deg, var(--pac-danger), color-mix(in srgb, var(--pac-danger) 70%, #000000));
+				background: color-mix(in srgb, var(--pac-danger) 94%, #000 6%);
 			}
 			.state-button-wrapper.night .state-button {
-				background: linear-gradient(135deg, #9c27b0, #8e24aa);
+				background: #6750a4;
 			}
 			.state-button-wrapper.disarm .state-button {
-				background: linear-gradient(135deg, var(--pac-ok), color-mix(in srgb, var(--pac-ok) 70%, #000000));
+				background: color-mix(in srgb, var(--pac-ok) 92%, #000 8%);
 			}
 			.button-label {
-				font-size: 0.78rem;
-				font-weight: 700;
+				font-size: 0.8125rem;
+				font-weight: 500;
+				letter-spacing: 0.00625em;
 			}
 			.button-description {
-				font-size: 0.68rem;
+				font-size: 0.75rem;
+				font-weight: 400;
 				color: var(--pac-text-soft);
-				margin-top: 2px;
+				line-height: 1.33;
+				margin-top: 4px;
 			}
 
 			.feedback {
-				margin: 0 14px 10px;
-				border-radius: 10px;
-				padding: 8px 10px;
-				font-size: 0.74rem;
+				margin: 0 16px 12px;
+				border-radius: var(--pac-radius-md);
+				padding: 10px 12px;
+				font-size: 0.8125rem;
+				line-height: 1.43;
 			}
 			.feedback.success {
 				color: var(--pac-ok);
@@ -1337,14 +1378,15 @@ class PulsonAlarmCard extends LitElement {
 			}
 
 			.partitions-list {
-				padding: 0 14px 78px;
+				padding: 0 16px 78px;
 				display: grid;
-				gap: 10px;
+				gap: 8px;
 			}
 			.partition-card {
-				border-radius: 12px;
+				border-radius: var(--pac-radius-lg);
 				border: 1px solid var(--pac-border);
-				background: var(--pac-surface);
+				background: var(--pac-bg-soft);
+				box-shadow: var(--pac-elev-1);
 				border-left-width: 3px;
 				border-left-color: var(--pac-border);
 			}
@@ -1451,32 +1493,34 @@ class PulsonAlarmCard extends LitElement {
 				gap: 6px;
 			}
 			.partition-title .name {
-				font-size: 0.82rem;
-				font-weight: 700;
+				font-size: 0.875rem;
+				font-weight: 500;
+				letter-spacing: 0.00625em;
 				white-space: nowrap;
 				overflow: hidden;
 				text-overflow: ellipsis;
 			}
 			.id-label {
-				font-size: 0.65rem;
-				border-radius: 5px;
-				padding: 2px 5px;
+				font-size: 0.6875rem;
+				font-weight: 500;
+				border-radius: 6px;
+				padding: 3px 8px;
 				background: var(--pac-surface-2);
 				color: var(--pac-text-soft);
 			}
 			.partition-meta {
-				margin-top: 2px;
+				margin-top: 4px;
 				display: flex;
 				align-items: baseline;
 				flex-wrap: wrap;
 				gap: 0 6px;
-				font-size: 0.73rem;
-				line-height: 1.35;
+				font-size: 0.8125rem;
+				line-height: 1.43;
 				color: var(--pac-text-soft);
 			}
 			.partition-status {
 				color: inherit;
-				font-weight: 500;
+				font-weight: 400;
 			}
 			.partition-meta-sep {
 				color: var(--pac-text-soft);
@@ -1499,15 +1543,21 @@ class PulsonAlarmCard extends LitElement {
 				font-weight: 400;
 			}
 			.quick-action {
-				border: 1px solid var(--pac-border);
+				border: none;
 				background: var(--pac-surface-2);
 				color: var(--pac-text);
-				border-radius: 10px;
-				min-width: 36px;
-				min-height: 36px;
+				border-radius: var(--pac-radius-md);
+				min-width: 40px;
+				min-height: 40px;
 				display: grid;
 				place-items: center;
 				cursor: pointer;
+				box-shadow: var(--pac-elev-1);
+				transition: box-shadow 0.2s ease, background 0.2s ease;
+			}
+			.quick-action:hover:not(:disabled) {
+				box-shadow: var(--pac-elev-2);
+				background: var(--pac-surface);
 			}
 			.quick-action ha-icon {
 				--mdc-icon-size: 18px;
@@ -1521,34 +1571,42 @@ class PulsonAlarmCard extends LitElement {
 				background: transparent;
 				color: var(--pac-text-soft);
 				cursor: pointer;
-				transition: transform 0.2s ease;
+				border-radius: 999px;
+				padding: 4px;
+				transition: transform 0.2s ease, background 0.2s ease;
+			}
+			.expand-btn:hover {
+				background: color-mix(in srgb, var(--pac-text-soft) 10%, transparent);
 			}
 			.expand-btn.rotated {
 				transform: rotate(180deg);
 			}
 
 			.zones-grid {
-				padding: 0 10px 10px;
+				padding: 0 12px 12px;
 				display: grid;
-				gap: 7px;
+				gap: 8px;
 			}
 			.zone-item {
 				display: flex;
 				justify-content: space-between;
 				align-items: center;
-				border-radius: 10px;
-				padding: 8px 10px;
-				background: var(--pac-surface-2);
+				border-radius: var(--pac-radius-md);
+				padding: 10px 12px;
+				background: var(--pac-surface);
+				border: 1px solid color-mix(in srgb, var(--pac-border) 65%, transparent);
+				box-shadow: 0 1px 1px rgba(60, 64, 67, 0.06);
 			}
 			.zone-name {
 				display: flex;
 				gap: 6px;
 				align-items: center;
-				font-size: 0.74rem;
+				font-size: 0.8125rem;
+				font-weight: 400;
 			}
 			.zone-status {
-				font-size: 0.72rem;
-				font-weight: 700;
+				font-size: 0.75rem;
+				font-weight: 500;
 			}
 			.zone-status.status-ready {
 				color: var(--pac-ok);
@@ -1572,11 +1630,8 @@ class PulsonAlarmCard extends LitElement {
 				right: 0;
 				z-index: 3;
 				border-top: 1px solid var(--pac-border);
-				background: linear-gradient(
-					180deg,
-					color-mix(in srgb, var(--pac-bg) 88%, transparent),
-					color-mix(in srgb, var(--pac-bg) 98%, transparent)
-				);
+				background: color-mix(in srgb, var(--pac-bg) 97%, var(--primary-text-color) 3%);
+				box-shadow: 0 -2px 8px rgba(60, 64, 67, 0.06);
 			}
 			.drawer-handle {
 				width: 100%;
@@ -1589,8 +1644,15 @@ class PulsonAlarmCard extends LitElement {
 				display: inline-flex;
 				align-items: center;
 				justify-content: center;
-				gap: 6px;
+				gap: 8px;
 				cursor: pointer;
+				font-family: inherit;
+				font-size: 0.875rem;
+				font-weight: 500;
+				letter-spacing: 0.00625em;
+			}
+			.drawer-handle:hover {
+				background: color-mix(in srgb, var(--primary-text-color) 4%, transparent);
 			}
 			.drawer-content {
 				display: none;
@@ -1604,23 +1666,28 @@ class PulsonAlarmCard extends LitElement {
 				margin-bottom: 12px;
 			}
 			.pin-title {
-				font-size: 0.8rem;
-				font-weight: 700;
+				font-size: 0.875rem;
+				font-weight: 500;
+				letter-spacing: 0.00625em;
 				margin-bottom: 8px;
 			}
 			.pin-subtitle {
-				font-size: 0.7rem;
+				font-size: 0.8125rem;
+				font-weight: 400;
+				line-height: 1.43;
 				color: var(--pac-text-soft);
 				margin-bottom: 8px;
 			}
 			.pin-display {
-				min-height: 42px;
-				border-radius: 10px;
+				min-height: 48px;
+				border-radius: var(--pac-radius-lg);
 				border: 1px solid var(--pac-border);
+				background: var(--pac-bg-soft);
 				display: grid;
 				place-items: center;
-				letter-spacing: 0.3rem;
+				letter-spacing: 0.35rem;
 				margin-bottom: 8px;
+				box-shadow: inset 0 1px 2px rgba(60, 64, 67, 0.06);
 			}
 			.keys {
 				display: grid;
@@ -1628,12 +1695,21 @@ class PulsonAlarmCard extends LitElement {
 				gap: 7px;
 			}
 			.key {
-				min-height: 38px;
-				border-radius: 9px;
-				border: 1px solid var(--pac-border);
-				background: var(--pac-surface-2);
+				min-height: 44px;
+				border-radius: var(--pac-radius-md);
+				border: none;
+				background: var(--pac-surface);
 				color: var(--pac-text);
 				cursor: pointer;
+				font-family: inherit;
+				font-size: 1.125rem;
+				font-weight: 500;
+				box-shadow: var(--pac-elev-1);
+				transition: box-shadow 0.15s ease, background 0.15s ease;
+			}
+			.key:hover {
+				box-shadow: var(--pac-elev-2);
+				background: var(--pac-bg-soft);
 			}
 			.key.alt {
 				color: var(--pac-text-soft);
@@ -1645,20 +1721,28 @@ class PulsonAlarmCard extends LitElement {
 				gap: 7px;
 			}
 			.btn {
-				min-height: 40px;
-				border-radius: 9px;
+				min-height: 44px;
+				border-radius: var(--pac-radius-md);
 				cursor: pointer;
-				font-weight: 700;
+				font-family: inherit;
+				font-weight: 500;
+				font-size: 0.875rem;
+				letter-spacing: 0.00625em;
 			}
 			.btn.ghost {
 				border: 1px solid var(--pac-border);
 				background: transparent;
-				color: var(--pac-text-soft);
+				color: var(--pac-accent);
 			}
 			.btn.solid {
-				border: 1px solid color-mix(in srgb, var(--pac-accent) 55%, transparent);
-				background: color-mix(in srgb, var(--pac-accent) 85%, #ffffff 15%);
-				color: #ffffff;
+				border: none;
+				background: var(--pac-accent);
+				color: #fff;
+				box-shadow: var(--pac-elev-1);
+			}
+			.btn.solid:hover:not(:disabled) {
+				box-shadow: var(--pac-elev-2);
+				filter: brightness(1.03);
 			}
 			.btn:disabled {
 				opacity: 0.6;
@@ -1682,10 +1766,11 @@ class PulsonAlarmCard extends LitElement {
 				font-size: 0.65rem;
 			}
 			.special-alarm-row {
-				border-radius: 12px;
+				border-radius: var(--pac-radius-lg);
 				border: 1px solid var(--pac-border);
-				background: var(--pac-surface);
-				padding: 10px;
+				background: var(--pac-bg-soft);
+				padding: 12px;
+				box-shadow: var(--pac-elev-1);
 			}
 			.special-alarm-row.disabled {
 				opacity: 0.72;
@@ -1693,10 +1778,11 @@ class PulsonAlarmCard extends LitElement {
 			.special-alarm-header {
 				display: flex;
 				align-items: center;
-				gap: 6px;
-				font-weight: 700;
-				font-size: 0.8rem;
-				margin-bottom: 8px;
+				gap: 8px;
+				font-weight: 500;
+				font-size: 0.875rem;
+				letter-spacing: 0.00625em;
+				margin-bottom: 10px;
 			}
 			.special-alarm-row.variant-panic .special-alarm-header ha-icon {
 				color: var(--pac-danger);
@@ -1711,9 +1797,10 @@ class PulsonAlarmCard extends LitElement {
 				position: relative;
 				height: 50px;
 				border-radius: 999px;
-				background: var(--pac-surface-2);
-				border: 1px solid var(--pac-border);
+				background: var(--pac-surface);
+				border: 1px solid color-mix(in srgb, var(--pac-border) 70%, transparent);
 				overflow: hidden;
+				box-shadow: inset 0 1px 2px rgba(60, 64, 67, 0.06);
 			}
 			.special-alarm-row.variant-panic .special-progress {
 				background: linear-gradient(
@@ -1765,9 +1852,9 @@ class PulsonAlarmCard extends LitElement {
 				height: 42px;
 				margin-top: 4px;
 				border-radius: 999px;
-				border: 2px solid #ffffff;
+				border: 2px solid color-mix(in srgb, var(--pac-bg) 92%, var(--primary-text-color) 8%);
 				background: var(--pac-danger);
-				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-danger) 40%, transparent);
+				box-shadow: var(--pac-elev-2);
 			}
 			.special-alarm-row.variant-fire .special-slider::-webkit-slider-thumb {
 				-webkit-appearance: none;
@@ -1776,9 +1863,9 @@ class PulsonAlarmCard extends LitElement {
 				height: 42px;
 				margin-top: 4px;
 				border-radius: 999px;
-				border: 2px solid #ffffff;
+				border: 2px solid color-mix(in srgb, var(--pac-bg) 92%, var(--primary-text-color) 8%);
 				background: var(--pac-warn);
-				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-warn) 38%, transparent);
+				box-shadow: var(--pac-elev-2);
 			}
 			.special-alarm-row.variant-medical .special-slider::-webkit-slider-thumb {
 				-webkit-appearance: none;
@@ -1787,9 +1874,9 @@ class PulsonAlarmCard extends LitElement {
 				height: 42px;
 				margin-top: 4px;
 				border-radius: 999px;
-				border: 2px solid #ffffff;
+				border: 2px solid color-mix(in srgb, var(--pac-bg) 92%, var(--primary-text-color) 8%);
 				background: color-mix(in srgb, var(--pac-accent) 55%, var(--pac-ok) 45%);
-				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-accent) 35%, transparent);
+				box-shadow: var(--pac-elev-2);
 			}
 			.special-slider::-moz-range-track {
 				height: 50px;
@@ -1799,34 +1886,36 @@ class PulsonAlarmCard extends LitElement {
 			.special-alarm-row.variant-panic .special-slider::-moz-range-thumb {
 				width: 42px;
 				height: 42px;
-				border: 2px solid #ffffff;
+				border: 2px solid color-mix(in srgb, var(--pac-bg) 92%, var(--primary-text-color) 8%);
 				border-radius: 999px;
 				background: var(--pac-danger);
-				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-danger) 40%, transparent);
+				box-shadow: var(--pac-elev-2);
 			}
 			.special-alarm-row.variant-fire .special-slider::-moz-range-thumb {
 				width: 42px;
 				height: 42px;
-				border: 2px solid #ffffff;
+				border: 2px solid color-mix(in srgb, var(--pac-bg) 92%, var(--primary-text-color) 8%);
 				border-radius: 999px;
 				background: var(--pac-warn);
-				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-warn) 38%, transparent);
+				box-shadow: var(--pac-elev-2);
 			}
 			.special-alarm-row.variant-medical .special-slider::-moz-range-thumb {
 				width: 42px;
 				height: 42px;
-				border: 2px solid #ffffff;
+				border: 2px solid color-mix(in srgb, var(--pac-bg) 92%, var(--primary-text-color) 8%);
 				border-radius: 999px;
 				background: color-mix(in srgb, var(--pac-accent) 55%, var(--pac-ok) 45%);
-				box-shadow: 0 4px 12px color-mix(in srgb, var(--pac-accent) 35%, transparent);
+				box-shadow: var(--pac-elev-2);
 			}
 			.special-slider.resetting {
 				transition: all 0.25s ease;
 			}
 			.special-hint {
-				margin-top: 6px;
-				font-size: 0.69rem;
+				margin-top: 8px;
+				font-size: 0.75rem;
+				line-height: 1.43;
 				color: var(--pac-text-soft);
+				font-weight: 400;
 			}
 
 			.pin-mode {
@@ -1848,14 +1937,17 @@ class PulsonAlarmCard extends LitElement {
 			}
 
 			.empty {
-				color: var(--error-color, #ff5b62);
-				font-weight: 700;
-				padding: 12px;
+				color: var(--pac-text-soft);
+				font-weight: 400;
+				font-size: 0.875rem;
+				line-height: 1.43;
+				padding: 16px;
 			}
 			code {
 				background: var(--pac-surface-2);
-				padding: 0.1rem 0.35rem;
-				border-radius: 6px;
+				padding: 0.15rem 0.4rem;
+				border-radius: 4px;
+				font-size: 0.8125em;
 			}
 		`
 	}
