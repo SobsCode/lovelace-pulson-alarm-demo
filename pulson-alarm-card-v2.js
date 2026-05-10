@@ -597,8 +597,8 @@ class PulsonAlarmCard extends LitElement {
 							<div class="panic-hint">
 								${this._config.panic_service
 									? this._panicSlider >= 100
-										? 'Przytrzymaj chwilę na końcu, aby potwierdzić PANIC.'
-										: 'Przeciągnij i przytrzymaj na końcu, aby aktywować PANIC.'
+										? 'Przytrzymaj chwilę na końcu, aby potwierdzić Napad.'
+										: 'Przeciągnij i przytrzymaj na końcu, aby aktywować Napad.'
 									: 'Ustaw panic_service w config, aby aktywować.'}
 							</div>
 						</div>
