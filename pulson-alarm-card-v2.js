@@ -370,6 +370,13 @@ class PulsonAlarmCard extends LitElement {
 		return actions[0]
 	}
 
+	/** Przy rozbrojeniu i „Brak gotowości” — szybki guzik uzbrojenia widoczny, lecz nieaktywny. */
+	_partitionQuickArmBlockedByReadiness(partition, primaryAction) {
+		if (!primaryAction || primaryAction === 'alarm_disarm') return false
+		const readiness = this._partitionReadinessLine(partition)
+		return readiness?.variant === 'not_ready'
+	}
+
 	_shortPartitionName(name, index) {
 		if (!name) return index ? `Partycja ${index}` : 'Partycja'
 		const slugLabel = this._config.gateway_slug
@@ -647,6 +654,13 @@ class PulsonAlarmCard extends LitElement {
 						const expanded = this._expandedPartitionId === partition.id
 						const zoneList = this._zonesForPartition(partition)
 						const readiness = this._partitionReadinessLine(partition)
+						const primary = this._primaryActionForPartition(partition)
+						const quickArmBlocked = primary && this._partitionQuickArmBlockedByReadiness(partition, primary)
+						const quickTitle = primary
+							? quickArmBlocked
+								? `${this._actionUi(primary).label} — partycja nie jest gotowa do uzbrojenia`
+								: this._actionUi(primary).label
+							: ''
 						return html`
 							<div class="partition-card">
 								<div class="partition-content">
@@ -666,14 +680,17 @@ class PulsonAlarmCard extends LitElement {
 												: ''}
 										</div>
 									</div>
-									${this._primaryActionForPartition(partition)
+									${primary
 										? html`
 												<button
 													class="quick-action"
-													title=${this._actionUi(this._primaryActionForPartition(partition)).label}
-													@click=${() =>
-														this._setSinglePartitionAction(partition, this._primaryActionForPartition(partition))}>
-													<ha-icon icon=${this._actionUi(this._primaryActionForPartition(partition)).icon}></ha-icon>
+													title=${quickTitle}
+													?disabled=${quickArmBlocked}
+													@click=${() => {
+														if (quickArmBlocked) return
+														this._setSinglePartitionAction(partition, primary)
+													}}>
+													<ha-icon icon=${this._actionUi(primary).icon}></ha-icon>
 												</button>
 											`
 										: ''}
@@ -1045,6 +1062,10 @@ class PulsonAlarmCard extends LitElement {
 			}
 			.quick-action ha-icon {
 				--mdc-icon-size: 18px;
+			}
+			.quick-action:disabled {
+				opacity: 0.45;
+				cursor: not-allowed;
 			}
 			.expand-btn {
 				border: none;
