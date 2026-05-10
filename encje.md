@@ -24,6 +24,7 @@ Zakładając domyślną nazwę urządzenia: **Pulson Security Integration Gatewa
 - `sensor.pulson_security_integration_gateway_last_partition_command_status`
 - `sensor.pulson_security_integration_gateway_last_partition_code_valid`
 - `sensor.pulson_security_integration_gateway_any_fault`
+- `sensor.pulson_security_integration_gateway_user_code_mode` — stan `ui` (PIN na karcie) lub `backend` (kod po stronie integracji, bez klawiatury na karcie)
 
 ### Text
 

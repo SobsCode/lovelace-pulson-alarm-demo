@@ -57,6 +57,11 @@ class PulsonAlarmCard extends LitElement {
 			panic_button_entity: null,
 			fire_alarm_button_entity: null,
 			medical_alarm_button_entity: null,
+			/**
+			 * Sensor z trybem kodu: `ui` (klawiatura na karcie) lub `backend` (kod po stronie integracji).
+			 * Domyślnie: `sensor.<gateway_slug>_user_code_mode`. `false` / `""` = zawsze UI.
+			 */
+			user_code_mode_entity: null,
 			...config,
 		}
 	}
@@ -254,6 +259,35 @@ class PulsonAlarmCard extends LitElement {
 		return `sensor.${this._config.gateway_slug}_partition_${partition.index}_ready`
 	}
 
+	_userCodeModeEntityId() {
+		const raw = this._config?.user_code_mode_entity
+		if (raw === false || raw === '') return null
+		if (raw) return raw
+		return `sensor.${this._config.gateway_slug}_user_code_mode`
+	}
+
+	/**
+	 * `ui` — PIN na karcie. `backend` — bez klawiatury, wywołanie z pustym `code` (kod w integracji).
+	 * Brak encji / nieznany stan → `ui`.
+	 */
+	_userCodeMode() {
+		const id = this._userCodeModeEntityId()
+		if (!id || !this._hass?.states[id]) return 'ui'
+		const s = String(this._hass.states[id].state ?? '')
+			.toLowerCase()
+			.trim()
+		if (s === 'backend') return 'backend'
+		return 'ui'
+	}
+
+	async _executeAlarmActionWithoutPin(action, pendingTargets) {
+		if (this._isSending) return
+		this._pendingAction = action
+		this._pendingTargets = pendingTargets
+		this._pin = ''
+		await this._confirmPendingAction()
+	}
+
 	/**
 	 * Gotowość do uzbrojenia z sensor.<slug>_partition_<n>_ready — tylko gdy partycja rozbrojona.
 	 * @returns {null | { variant: 'ready' | 'not_ready' | 'unknown', label: string }}
@@ -435,18 +469,28 @@ class PulsonAlarmCard extends LitElement {
 	}
 
 	_setAllPartitionsAction(action) {
+		this._feedback = null
+		if (this._userCodeMode() === 'backend') {
+			this._drawerOpen = false
+			void this._executeAlarmActionWithoutPin(action, null)
+			return
+		}
 		this._pendingAction = action
 		this._pendingTargets = null
 		this._pin = ''
-		this._feedback = null
 		this._drawerOpen = true
 	}
 
 	_setSinglePartitionAction(partition, action) {
+		this._feedback = null
+		if (this._userCodeMode() === 'backend') {
+			this._drawerOpen = false
+			void this._executeAlarmActionWithoutPin(action, [partition.entityId])
+			return
+		}
 		this._pendingAction = action
 		this._pendingTargets = [partition.entityId]
 		this._pin = ''
-		this._feedback = null
 		this._drawerOpen = true
 	}
 
@@ -952,7 +996,7 @@ class PulsonAlarmCard extends LitElement {
 			>`
 		}
 
-		if (this._pendingAction) {
+		if (this._pendingAction && this._userCodeMode() !== 'backend') {
 			return this._renderPinMode(partitions)
 		}
 
